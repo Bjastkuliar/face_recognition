@@ -1,4 +1,4 @@
-package org.noi.face_recognition
+package org.noi.face_recognition.analysis
 
 import android.content.Context
 import android.gesture.Prediction
@@ -33,7 +33,7 @@ class FrameAnalyzer(context: Context, private var model: FaceNetModel) : ImageAn
 
     /**Store the face embeddings in a ( String , FloatArray ) ArrayList.
      * Where String -> name of the person and FloatArray Embedding of the face.     */
-    var faceList = ArrayList<Pair<String,FloatArray>>()
+    private var faceList = ArrayList<Pair<String,FloatArray>>()
 
     private val maskDetectionModel = MaskDetectionModel( context )
 
