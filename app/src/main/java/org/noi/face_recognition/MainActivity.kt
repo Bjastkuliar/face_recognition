@@ -6,6 +6,8 @@ import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -15,8 +17,16 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import org.noi.face_recognition.databinding.ActivityMainBinding
+import org.noi.face_recognition.model.FaceNetModel
+import org.noi.face_recognition.model.Models
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
+//TODO: image capture
+//TODO: image capture passed to tflite model
+//TODO: tflite returns embeddings
+//TODO: embeddings confronted with already saved ones
+//TODO: returns the label of most-similar one or Unknown
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,10 +34,34 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var cameraExecutor: ExecutorService
 
+    /** Default Model is FaceNet**/
+    //TODO: check if it is possible to switch to quantized (faster) models "dynamically"
+    private val modelInfo = Models.FACE_NET
+
+    private lateinit var faceNetModel : FaceNetModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        //hides systemBar
+        //TODO: not working properly
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.R){
+            val windowInsetsController = window.decorView.windowInsetsController
+            if(windowInsetsController == null){
+                return
+            } else {
+                windowInsetsController.hide(WindowInsets.Type.systemBars())
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
+        }
+
+
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
+
+        faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
 
         //request permissions
         if(allPermissionsGranted()){
@@ -60,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder()
                 .build()
                 .also {
-                    it.setSurfaceProvider(viewBinding.viewFinder.surfaceProvider)
+                    it.setSurfaceProvider(viewBinding.preview.surfaceProvider)
                 }
 
             // Select front camera as a default
