@@ -1,7 +1,6 @@
 package org.noi.face_recognition.analysis
 
 import android.content.Context
-import android.gesture.Prediction
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.util.Log
@@ -20,6 +19,7 @@ import org.noi.face_recognition.model.FaceNetModel
 import org.noi.face_recognition.model.MaskDetectionModel
 import kotlin.math.pow
 import kotlin.math.sqrt
+
 
 class FrameAnalyzer(context: Context, private var model: FaceNetModel) : ImageAnalysis.Analyzer {
 
@@ -88,11 +88,13 @@ class FrameAnalyzer(context: Context, private var model: FaceNetModel) : ImageAn
                     subject = model.getFaceEmbedding(croppedBitmap)
 
                     //perform face mask detection
-                    var maskLabel = ""
+                    //TODO: replace the label with a boolean value also in MaskDetectionModel
+                    var maskLabel: String
                     var wearingMask = false
                     if (isMaskDetectionOn) {
                         maskLabel = maskDetectionModel.detectMask(croppedBitmap)
-                        wearingMask = true
+                        if(maskLabel == MaskDetectionModel.MASK)
+                            wearingMask = true
                     }
 
                     if (!wearingMask) {
@@ -156,5 +158,9 @@ class FrameAnalyzer(context: Context, private var model: FaceNetModel) : ImageAn
     }
 }
 
-/**Data class for storing the **/
+/**Data class for storing the Overlay information
+ * @param bbox bounding box of the detected face
+ * @param label name of the detected face
+ * @param maskLabel whether it has a mask on or not**/
+//TODO: Swap out masklabel for boolean
 data class Prediction(var bbox : Rect, var label : String, var maskLabel : String = "" )

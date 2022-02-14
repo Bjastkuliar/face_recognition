@@ -60,7 +60,7 @@ class BitmapUtils {
 
         // Rotate the given `source` by `degrees`.
         // See this SO answer -> https://stackoverflow.com/a/16219591/10878733
-        fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
+        private fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
             val matrix = Matrix()
             matrix.postRotate( degrees )
             return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix , false )

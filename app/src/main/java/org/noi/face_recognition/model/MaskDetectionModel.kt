@@ -19,9 +19,6 @@ import java.nio.ByteBuffer
   * https://github.com/achen353/Face-Mask-Detector
   * **/
 
-private const val MASK = "mask"
-private const val NO_MASK = "no mask"
-
 class MaskDetectionModel( context: Context ) {
 
     private val imgSize = 224
@@ -30,7 +27,7 @@ class MaskDetectionModel( context: Context ) {
         0 to MASK ,
         1 to NO_MASK ,
     )
-    private val modelName = "src/main/ml/mask_detector.tflite"
+    private val modelName = "mask_detector.tflite"
 
     private var interpreter : Interpreter
     private val imageTensorProcessor = ImageProcessor.Builder()
@@ -84,5 +81,11 @@ class MaskDetectionModel( context: Context ) {
         return imageTensorProcessor.process( TensorImage.fromBitmap( image ) ).buffer
     }
 
+     companion object {
+
+         const val MASK = "mask"
+         const val NO_MASK = "no mask"
+
+     }
 
 }

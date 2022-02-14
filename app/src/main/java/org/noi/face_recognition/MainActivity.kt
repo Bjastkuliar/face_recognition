@@ -9,26 +9,32 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getMainExecutor
+import androidx.lifecycle.LifecycleOwner
+import org.noi.face_recognition.analysis.FrameAnalyzer
+import org.noi.face_recognition.analysis.ImageAnalyzer
+import org.noi.face_recognition.data.FileIO
 import org.noi.face_recognition.databinding.ActivityMainBinding
 import org.noi.face_recognition.model.FaceNetModel
 import org.noi.face_recognition.model.Models
+import java.io.File
+import java.io.FileInputStream
+import java.io.ObjectInputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.collections.ArrayList
 
 //TODO: image capture
 //TODO: image capture passed to tflite model
@@ -36,6 +42,7 @@ import java.util.concurrent.Executors
 //TODO: embeddings confronted with already saved ones
 //TODO: returns the label of most-similar one or Unknown
 
+@ExperimentalGetImage
 class MainActivity : AppCompatActivity() {
 
     private lateinit var viewBinding: ActivityMainBinding
@@ -43,6 +50,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
 
     private var imageCapture : ImageCapture? = null
+
+    /*
+    * Frame Analyzer analyzes a continuous stream of */
+    private lateinit var frameAnalyzer : FrameAnalyzer
+    private lateinit var imageAnalyzer : ImageAnalyzer
+
+    private val fileIO = FileIO()
+
+    private  lateinit var data : ArrayList<Pair<String,FloatArray>>
 
     /** Default Model is FaceNet**/
     //TODO: check if it is possible to switch to quantized (faster) models "dynamically"
@@ -53,18 +69,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        //hides systemBar
-        //TODO: not working properly
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.R){
-            val windowInsetsController = window.decorView.windowInsetsController
-            if(windowInsetsController == null){
-                return
-            } else {
-                windowInsetsController.hide(WindowInsets.Type.systemBars())
-            }
-        } else {
+        /* Remove the status bar to have a full screen experience
+         * See this answer on SO -> https://stackoverflow.com/a/68152688/10878733
+         */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.decorView.windowInsetsController!!
+                .hide( WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+        }
+        else {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
+
         }
 
 
@@ -72,6 +87,15 @@ class MainActivity : AppCompatActivity() {
         setContentView(viewBinding.root)
 
         faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
+
+        //frameAnalyzer = FrameAnalyzer(this,faceNetModel)
+        imageAnalyzer = ImageAnalyzer(this,faceNetModel)
+
+        if(fileIO.hasSerializedData(this)){
+            data = fileIO.loadSerializedImageData(applicationContext)
+        } else {
+            Log.d(TAG,"Application has no serialized data")
+        }
 
         //request permissions
         if(allPermissionsGranted()){
@@ -87,6 +111,11 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
 
+    /**
+     * Method responsible for taking the picture when the button is pressed
+     * The result picture is then passed onto the analyzer
+     * **/
+    @ExperimentalGetImage
     private fun takePicture(){
         val imageCapture = imageCapture ?: return
         val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.ITALIAN).format(System.currentTimeMillis())
@@ -101,21 +130,24 @@ class MainActivity : AppCompatActivity() {
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues).build()
 
         imageCapture.takePicture(
-            outputOptions, getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback{
-                override fun onError(exception: ImageCaptureException) {
-                    Log.e(TAG,"Capture failed ${exception.message}", exception)
+            getMainExecutor(this),
+            object : ImageCapture.OnImageCapturedCallback(){
+                override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    //TODO: Process capture
                 }
 
-                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                    val msg = "Photo capture succeeded: ${outputFileResults.savedUri}"
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
+                override fun onError(exception: ImageCaptureException) {
+                    Log.e(TAG,"Error while trying to capture the picture", exception)
                 }
             }
         )
     }
 
+    /*private fun ics(){
+
+    }*/
+
+    @ExperimentalGetImage
     private fun buttonHandler(){
         val textView = findViewById<TextView>(R.id.result)
         takePicture()
