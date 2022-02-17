@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var frameAnalyzer : FrameAnalyzer
     private lateinit var imageAnalyzer : ImageAnalyzer
 
-    private val fileIO = FileIO()
+    private lateinit var fileIO: FileIO
 
     private  lateinit var data : ArrayList<Pair<String,FloatArray>>
 
@@ -91,8 +91,11 @@ class MainActivity : AppCompatActivity() {
         //frameAnalyzer = FrameAnalyzer(this,faceNetModel)
         imageAnalyzer = ImageAnalyzer(this,faceNetModel)
 
-        if(fileIO.hasSerializedData(this)){
-            data = fileIO.loadSerializedImageData(applicationContext)
+        //TODO: disable debugMode
+        fileIO = FileIO(this, true)
+
+        if(fileIO.hasSerializedData()){
+            data = fileIO.loadSerializedImageData()
         } else {
             Log.d(TAG,"Application has no serialized data")
         }
@@ -133,7 +136,7 @@ class MainActivity : AppCompatActivity() {
             getMainExecutor(this),
             object : ImageCapture.OnImageCapturedCallback(){
                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    //TODO: Process capture
+                    imageAnalyzer.analyze(imageProxy)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -196,6 +199,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
+    }
+
+    override fun onStop() {
+        fileIO.copyDeserializedDataToTextFile()
+        super.onStop()
     }
 
     @SuppressLint("MissingSuperCall")

@@ -23,7 +23,7 @@ const val TAG = "FaceNetModel"
 
 // Utility class for FaceNet model
 class FaceNetModel(context : Context,
-                   private var model : ModelInfo,
+                   var model : ModelInfo,
                    useGpu : Boolean,
                    useXNNPack : Boolean) {
 
