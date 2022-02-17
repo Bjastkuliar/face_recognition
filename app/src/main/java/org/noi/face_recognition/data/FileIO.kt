@@ -1,6 +1,7 @@
 package org.noi.face_recognition.data
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.util.Log
 import java.io.*
 
@@ -9,8 +10,10 @@ const val TAG = "FileIO"
 
 class FileIO(context: Context, debugMode : Boolean = false) {
 
-    private var fileDirectory = context.filesDir
-    private var debug = debugMode
+    private val fileDirectory = context.filesDir
+    private val debug = debugMode
+    private var assets = false
+    private val assetManager = context.assets
 
     /**Saves the provided pair Arraylist to file**/
     fun saveSerializedImageData(data : ArrayList<Pair<String,FloatArray>>) {
@@ -27,12 +30,27 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     /*The @Suppress tag is needed because we are reading data which we are sure is in the correct
     format, hence the "Unchecked cast" is not really unchecked*/
     @Suppress("UNCHECKED_CAST")
-    fun loadSerializedImageData() : ArrayList<Pair<String,FloatArray>> {
-        val serializedDataFile = File( fileDirectory , SERIALIZED_DATA_FILENAME )
-        Log.d(TAG,"Loading serialized data from ${serializedDataFile.absolutePath}")
-        val objectInputStream = ObjectInputStream( FileInputStream( serializedDataFile ) )
-        val data = objectInputStream.readObject() as ArrayList<Pair<String,FloatArray>>
-        objectInputStream.close()
+    fun loadSerializedImageData(assetManage : AssetManager) : ArrayList<Pair<String,FloatArray>> {
+        var data : ArrayList<Pair<String,FloatArray>> = arrayListOf()
+
+
+        try {
+            //image_data exists within the application asset folder
+            val assetStream = assetManager.open(SERIALIZED_DATA_FILENAME)
+            Log.d(TAG,"Found a serialized data within the assets")
+            val objectInputStream = ObjectInputStream(assetStream)
+            data = objectInputStream.readObject() as ArrayList<Pair<String, FloatArray>>
+            objectInputStream.close()
+            assets = true
+        } catch ( e : IOException){
+            //image_data is loaded from internal application data
+            Log.d(TAG,fileDirectory.absolutePath)
+            val serializedDataFile = File( fileDirectory , SERIALIZED_DATA_FILENAME )
+            Log.d(TAG, "Loading serialized data from ${serializedDataFile.canonicalPath}")
+            val objectInputStream2 = ObjectInputStream(FileInputStream(serializedDataFile))
+            data = objectInputStream2.readObject() as ArrayList<Pair<String, FloatArray>>
+            objectInputStream2.close()
+        }
         return data
     }
 
@@ -51,10 +69,11 @@ class FileIO(context: Context, debugMode : Boolean = false) {
         }
     }
 
-    /**Checks whether the image_data file exists in the data folder**/
+    /**Checks whether the image_data file exists in the data folder or among the assets**/
     fun hasSerializedData() : Boolean{
         val file = File(fileDirectory, SERIALIZED_DATA_FILENAME)
-        if(file.exists()){
+        val assetList = assetManager.list("")
+        if(file.exists()|| assetList?.contains(SERIALIZED_DATA_FILENAME) != false){
             return true
         }
         return false
@@ -70,19 +89,28 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     fun copyDeserializedDataToTextFile(){
 
         if(debug){
+            val data : ArrayList<Pair<String,FloatArray>>
             //read from serialized file
-            val serializedDataFile = File(fileDirectory, SERIALIZED_DATA_FILENAME)
-            Log.d(TAG, "Reading2 serialized data from ${serializedDataFile.absolutePath}")
-            val objectInputStream = ObjectInputStream(FileInputStream(serializedDataFile))
-            val data = objectInputStream.readObject() as ArrayList<Pair<String, FloatArray>>
-            objectInputStream.close()
+                if(assets){
+                    val assetStream = assetManager.open(SERIALIZED_DATA_FILENAME)
+                    Log.d(TAG,"Reading data from the assets")
+                    val objectInputStream = ObjectInputStream(assetStream)
+                    data = objectInputStream.readObject() as ArrayList<Pair<String, FloatArray>>
+                    objectInputStream.close()
+                } else {
+                    val serializedDataFile = File(fileDirectory, SERIALIZED_DATA_FILENAME)
+                    Log.d(TAG, "Reading2 serialized data from ${serializedDataFile.absolutePath}")
+                    val objectInputStream = ObjectInputStream(FileInputStream(serializedDataFile))
+                    data = objectInputStream.readObject() as ArrayList<Pair<String, FloatArray>>
+                    objectInputStream.close()
+                }
 
             //write to text file
             val deserializedDataFile = File(fileDirectory, "$SERIALIZED_DATA_FILENAME.txt")
             if (deserializedDataFile.exists()) {
                 deserializedDataFile.delete()
             }
-            Log.d(TAG, "Writing serialized data from ${serializedDataFile.absolutePath}")
+            Log.d(TAG, "Writing serialized data to  ${deserializedDataFile.absolutePath}")
             val fw = FileWriter(deserializedDataFile, true)
             data.forEach {
                 fw.write(it.first)

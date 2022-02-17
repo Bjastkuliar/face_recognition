@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
         fileIO = FileIO(this, true)
 
         if(fileIO.hasSerializedData()){
-            data = fileIO.loadSerializedImageData()
+            data = fileIO.loadSerializedImageData(applicationContext.assets)
         } else {
             Log.d(TAG,"Application has no serialized data")
         }
