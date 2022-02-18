@@ -30,6 +30,7 @@ import android.util.Size
 import android.view.View
 import android.view.WindowInsets
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -69,22 +70,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fileIO : FileIO
     private lateinit var textView: TextView
 
-    // <----------------------- User controls --------------------------->
-
-    // Use the device's GPU to perform faster computations.
-    // Refer https://www.tensorflow.org/lite/performance/gpu
-    private val useGpu = true
-
-    // Use XNNPack to accelerate inference.
-    // Refer https://blog.tensorflow.org/2020/07/accelerating-tensorflow-lite-xnnpack-integration.html
-    private val useXNNPack = true
-
     // You may the change the models here.
     // Use the model configs in Models.kt
     // Default is Models.FACENET ; Quantized models are faster
     private val modelInfo = Models.FACENET
-
-    // <---------------------------------------------------------------->
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,12 +92,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // Implementation of CameraX preview and the Feedback TextView
-
         previewView = findViewById( R.id.preview_view )
         textView = findViewById(R.id.textView)
         textView.text=getString(R.string.result,"Unknown")
 
-        // Necessary to keep the Overlay above the PreviewView so that the boxes are visible.
+
         faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
         frameAnalyser = FrameAnalyser(this, faceNetModel, textView)
         fileReader = FileReader( faceNetModel )
@@ -117,8 +105,8 @@ class MainActivity : AppCompatActivity() {
         // We'll only require the CAMERA permission from the user.
         // For scoped storage, particularly for accessing documents, we won't require WRITE_EXTERNAL_STORAGE or
         // READ_EXTERNAL_STORAGE permissions. See https://developer.android.com/training/data-storage
-        if ( ActivityCompat.checkSelfPermission( this , Manifest.permission.CAMERA ) != PackageManager.PERMISSION_GRANTED ) {
-            requestCameraPermission()
+        if ( !allPermissionsGranted() ) {
+            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
         else {
             startCameraPreview()
@@ -161,39 +149,6 @@ class MainActivity : AppCompatActivity() {
         cameraProvider.bindToLifecycle(this as LifecycleOwner, cameraSelector, preview , imageFrameAnalysis  )
     }
 
-    // We let the system handle the requestCode. This doesn't require onRequestPermissionsResult and
-    // hence makes the code cleaner.
-    // See the official docs -> https://developer.android.com/training/permissions/requesting#request-permission
-    private fun requestCameraPermission() {
-        cameraPermissionLauncher.launch( Manifest.permission.CAMERA )
-    }
-
-    private val cameraPermissionLauncher = registerForActivityResult( ActivityResultContracts.RequestPermission() ) {
-        isGranted ->
-        if ( isGranted ) {
-            startCameraPreview()
-        }
-        else {
-            val alertDialog = AlertDialog.Builder( this ).apply {
-                setTitle( "Camera Permission")
-                setMessage( "The app couldn't function without the camera permission." )
-                setCancelable( false )
-                setPositiveButton( "ALLOW" ) { dialog, _ ->
-                    dialog.dismiss()
-                    requestCameraPermission()
-                }
-                setNegativeButton( "CLOSE" ) { dialog, _ ->
-                    dialog.dismiss()
-                    finish()
-                }
-                create()
-            }
-            alertDialog.show()
-        }
-
-    }
-
-
     // ---------------------------------------------- //
 
 
@@ -229,8 +184,7 @@ class MainActivity : AppCompatActivity() {
                         catch ( e : Exception ) {
                             errorFound = true
                             Log.d(
-                                TAG, "Could not parse an image in $name directory. Make sure that the file structure is " +
-                                    "as described in the README of the project and then restart the app." )
+                                TAG, "Could not parse an image in $name directory" )
                             break
                         }
                     }
@@ -239,16 +193,14 @@ class MainActivity : AppCompatActivity() {
                 else {
                     errorFound = true
                     Log.d(
-                        TAG, "The selected folder should contain only directories. Make sure that the file structure is " +
-                            "as described in the README of the project and then restart the app." )
+                        TAG, "The selected folder should contain only directories" )
                 }
             }
         }
         else {
             errorFound = true
             Log.d(
-                TAG, "The selected folder doesn't contain any directories. Make sure that the file structure is " +
-                    "as described in the README of the project and then restart the app." )
+                TAG, "The selected folder doesn't contain any directories" )
         }
         if ( !errorFound ) {
             fileReader.run( images , fileReaderCallback )
@@ -257,8 +209,7 @@ class MainActivity : AppCompatActivity() {
         else {
             val alertDialog = AlertDialog.Builder( this ).apply {
                 setTitle( "Error while parsing directory")
-                setMessage( "There were some errors while parsing the directory. Please see the log below. Make sure that the file structure is " +
-                        "as described in the README of the project and then tap RESELECT" )
+                setMessage( "There were some errors while parsing the directory." )
                 setCancelable( false )
                 setPositiveButton( "RESELECT") { dialog, _ ->
                     dialog.dismiss()
@@ -301,5 +252,40 @@ class MainActivity : AppCompatActivity() {
             fileIO.saveSerializedImageData( data )
             Log.d(TAG, "Images parsed. Found $numImagesWithNoFaces images with no faces." )
         }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<String>, grantResults:
+        IntArray) {
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (allPermissionsGranted()) {
+                startCameraPreview()
+            } else {
+                Toast.makeText(this,
+                    "Permissions not granted by the user.",
+                    Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    /**Checks whether all permissions required were granted,
+     * see companion object for the permissions we are requiring**/
+    private fun allPermissionsGranted()= REQUIRED_PERMISSIONS.all{
+        ContextCompat.checkSelfPermission(
+            baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    companion object{
+        private const val REQUEST_CODE_PERMISSIONS = 10
+        private val REQUIRED_PERMISSIONS =
+            mutableListOf(
+                Manifest.permission.CAMERA
+            ).apply {
+                if(Build.VERSION.SDK_INT <= Build.VERSION_CODES.P){
+                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+            }.toTypedArray()
     }
 }
