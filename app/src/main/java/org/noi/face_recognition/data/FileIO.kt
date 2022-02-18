@@ -1,7 +1,6 @@
 package org.noi.face_recognition.data
 
 import android.content.Context
-import android.content.res.AssetManager
 import android.util.Log
 import java.io.*
 
@@ -30,9 +29,8 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     /*The @Suppress tag is needed because we are reading data which we are sure is in the correct
     format, hence the "Unchecked cast" is not really unchecked*/
     @Suppress("UNCHECKED_CAST")
-    fun loadSerializedImageData(assetManage : AssetManager) : ArrayList<Pair<String,FloatArray>> {
-        var data : ArrayList<Pair<String,FloatArray>> = arrayListOf()
-
+    fun loadSerializedImageData(): ArrayList<Pair<String,FloatArray>> {
+        var data: ArrayList<Pair<String, FloatArray>>
 
         try {
             //image_data exists within the application asset folder

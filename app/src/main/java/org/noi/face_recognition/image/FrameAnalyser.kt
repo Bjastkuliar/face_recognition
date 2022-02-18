@@ -1,44 +1,65 @@
+/*
+ * Copyright 2021 Shubham Panchal
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.noi.face_recognition.image
 
-package org.noi.face_recognition.analysis
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import androidx.camera.core.ExperimentalGetImage
+import android.widget.TextView
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import org.noi.face_recognition.model.FaceNetModel
+import org.noi.face_recognition.model.MaskDetectionModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.noi.face_recognition.image.BitmapUtils
-import org.noi.face_recognition.model.FaceNetModel
-import org.noi.face_recognition.model.MaskDetectionModel
+import org.noi.face_recognition.R
 import kotlin.math.pow
 import kotlin.math.sqrt
 
-class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
+private const val TAG = "FrameAnalyser"
+
+// Analyser class to process frames and produce detections.
+class FrameAnalyser(
+    private val context: Context,
+    private val model: FaceNetModel,
+    private val textView: TextView
+) : ImageAnalysis.Analyzer {
+
     private val realTimeOpts = FaceDetectorOptions.Builder()
-        .setPerformanceMode( FaceDetectorOptions.PERFORMANCE_MODE_FAST )
-        .build()
+            .setPerformanceMode( FaceDetectorOptions.PERFORMANCE_MODE_FAST )
+            .build()
     private val detector = FaceDetection.getClient(realTimeOpts)
 
-//Used to determine whether the incoming frame should be dropped or processed.*
-
-    private var isProcessing = false
-
-//Store the face embeddings in a ( String , FloatArray ) ArrayList.
-     //Where String -> name of the person and FloatArray Embedding of the face.
-
-    private var faceList = ArrayList<Pair<String,FloatArray>>()
-
-    private val maskDetectionModel = MaskDetectionModel( context )
-
+    private val nameScoreHashmap = HashMap<String,ArrayList<Float>>()
     private var subject = FloatArray( model.embeddingDim )
 
-    private val nameScoreHashmap = HashMap<String,ArrayList<Float>>()
+    // Used to determine whether the incoming frame should be dropped or processed.
+    private var isProcessing = false
+
+    // Store the face embeddings in a ( String , FloatArray ) ArrayList.
+    // Where String -> name of the person and FloatArray -> Embedding of the face.
+    var faceList = ArrayList<Pair<String,FloatArray>>()
+
+    private val maskDetectionModel = MaskDetectionModel( context )
 
     // <-------------- User controls --------------------------->
 
@@ -48,45 +69,47 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
     // Use this variable to enable/disable mask detection.
     private val isMaskDetectionOn = true
 
-    @ExperimentalGetImage
-    fun analyze(imageProxy : ImageProxy) {
-        if (isProcessing || faceList.size == 0) {
-            imageProxy.close()
+    // <-------------------------------------------------------->
+
+    @SuppressLint("UnsafeOptInUsageError")
+    override fun analyze(image: ImageProxy) {
+        // If the previous frame is still being processed, then skip this frame
+        if ( isProcessing || faceList.size == 0 ) {
+            image.close()
             return
-        } else {
+        }
+        else {
             isProcessing = true
 
             // Rotated bitmap for the FaceNet model
             val frameBitmap =
-                BitmapUtils.imageToBitmap(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
+                BitmapUtils.imageToBitmap(image.image!!, image.imageInfo.rotationDegrees)
 
-            val inputImage =
-                InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
+            // Configure frameHeight and frameWidth for output2overlay transformation matrix.
+
+            val inputImage = InputImage.fromMediaImage(image.image!!, image.imageInfo.rotationDegrees )
             detector.process(inputImage)
                 .addOnSuccessListener { faces ->
-                    CoroutineScope(Dispatchers.Default).launch {
+                    CoroutineScope( Dispatchers.Default ).launch {
                         runModel( faces , frameBitmap )
                     }
                 }
                 .addOnCompleteListener {
-                    imageProxy.close()
-                }
-                .addOnFailureListener {
-                    Log.e(TAG, "Failed detecting Faces", it)
+                    image.close()
                 }
         }
     }
 
 
-    private suspend fun runModel(faces : List<Face>, cameraFrameBitmap : Bitmap){
+    private suspend fun runModel( faces : List<Face> , cameraFrameBitmap : Bitmap ){
         withContext( Dispatchers.Default ) {
-            val predictions = ArrayList<Prediction>()
             for (face in faces) {
                 try {
                     // Crop the frame using face.boundingBox.
                     // Convert the cropped Bitmap to a ByteBuffer.
                     // Finally, feed the ByteBuffer to the FaceNet model.
-                    val croppedBitmap = BitmapUtils.cropRectFromBitmap( cameraFrameBitmap , face.boundingBox )
+                    val croppedBitmap =
+                        BitmapUtils.cropRectFromBitmap(cameraFrameBitmap, face.boundingBox)
                     subject = model.getFaceEmbedding( croppedBitmap )
 
                     // Perform face mask detection on the cropped frame Bitmap.
@@ -96,7 +119,7 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
                     }
 
                     // Continue with the recognition if the user is not wearing a face mask
-                    if (maskLabel == "no mask") {
+                    if (maskLabel == maskDetectionModel.noMask) {
                         // Perform clustering ( grouping )
                         // Store the clusters in a HashMap. Here, the key would represent the 'name'
                         // of that cluster and ArrayList<Float> would represent the collection of all
@@ -152,24 +175,9 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
                             }
                         }
                         Log.d(TAG, "Person identified as $bestScoreUserName" )
-                        predictions.add(
-                            Prediction(
-                                face.boundingBox,
-                                bestScoreUserName ,
-                                maskLabel
-                            )
-                        )
+                        updateTextView(bestScoreUserName)
                     }
-                    else {
-                        // Inform the user to remove the mask
-                        predictions.add(
-                            Prediction(
-                                face.boundingBox,
-                                "Please remove the mask" ,
-                                maskLabel
-                            )
-                        )
-                    }
+
                 }
                 catch ( e : Exception ) {
                     // If any exception occurs with this box and continue with the next boxes.
@@ -179,6 +187,7 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
             }
             withContext( Dispatchers.Main ) {
                 // Clear the BoundingBoxOverlay and set the new results ( boxes ) to be displayed.
+
 
                 isProcessing = false
             }
@@ -193,7 +202,6 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
 
 
     // Compute the cosine of the angle between x1 and x2.
-    @Suppress("SimplifiableCallChain")
     private fun cosineSimilarity( x1 : FloatArray , x2 : FloatArray ) : Float {
         val mag1 = sqrt( x1.map { it * it }.sum() )
         val mag2 = sqrt( x2.map { it * it }.sum() )
@@ -201,8 +209,8 @@ class ImageAnalyzer(context: Context, private var model: FaceNetModel) {
         return dot / (mag1 * mag2)
     }
 
-
-    companion object{
-        const val TAG = "ImageAnalyzer"
+    private fun updateTextView(name : String){
+        textView.text = context.getString(R.string.result,name)
     }
+
 }

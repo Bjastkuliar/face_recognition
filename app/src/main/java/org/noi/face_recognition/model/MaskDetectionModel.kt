@@ -13,19 +13,18 @@ import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
 
- /**
-  * Mask Detection model based on the model provided
-  * from achen353 on GitHub
-  * https://github.com/achen353/Face-Mask-Detector
-  * **/
-
+// Mask Detection model
+// Source -> https://github.com/achen353/Face-Mask-Detector
 class MaskDetectionModel( context: Context ) {
+
+    private val mask = "mask"
+    val noMask = "no mask"
 
     private val imgSize = 224
     private val numClasses = 2
     private val classIndexToLabel = mapOf(
-        0 to MASK ,
-        1 to NO_MASK ,
+        0 to mask ,
+        1 to noMask ,
     )
     private val modelName = "mask_detector.tflite"
 
@@ -81,11 +80,5 @@ class MaskDetectionModel( context: Context ) {
         return imageTensorProcessor.process( TensorImage.fromBitmap( image ) ).buffer
     }
 
-     companion object {
-
-         const val MASK = "mask"
-         const val NO_MASK = "no mask"
-
-     }
 
 }

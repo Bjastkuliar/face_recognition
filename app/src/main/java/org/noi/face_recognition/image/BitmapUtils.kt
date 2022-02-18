@@ -15,15 +15,12 @@
 package org.noi.face_recognition.image
 
 import android.content.ContentResolver
-import android.content.Context
 import android.graphics.*
 import android.media.Image
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.io.FileDescriptor
-import java.io.FileOutputStream
 import kotlin.math.ceil
 
 // Helper class for operations on Bitmaps
@@ -60,7 +57,7 @@ class BitmapUtils {
 
         // Rotate the given `source` by `degrees`.
         // See this SO answer -> https://stackoverflow.com/a/16219591/10878733
-        private fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
+        fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
             val matrix = Matrix()
             matrix.postRotate( degrees )
             return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix , false )
@@ -74,15 +71,6 @@ class BitmapUtils {
             matrix.postScale(-1f, 1f, source.width / 2f, source.height / 2f)
             return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
         }
-
-
-        // Use this method to save a Bitmap to the internal storage ( app-specific storage ) of your device.
-        // To see the image, go to "Device File Explorer" -> "data" -> "data" -> "com.ml.quaterion.facenetdetection" -> "files"
-        fun saveBitmap(context: Context, image: Bitmap, name: String) {
-            val fileOutputStream = FileOutputStream(File( context.filesDir.absolutePath + "/$name.png"))
-            image.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream)
-        }
-
 
         // Convert android.media.Image to android.graphics.Bitmap
         // See the SO answer -> https://stackoverflow.com/a/44486294/10878733
