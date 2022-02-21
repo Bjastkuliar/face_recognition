@@ -76,6 +76,8 @@ class FrameAnalyser(
 
     private var takePicture = true
 
+    var addUnknown : UnknownPerson? = null
+
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(image: ImageProxy) {
         // If the previous frame is still being processed, then skip this frame
@@ -182,9 +184,10 @@ class FrameAnalyser(
                         Log.d(TAG, "Person identified as $bestScoreUserName" )
                         updateTextView(bestScoreUserName)
                         takePicture = true
-                        if(bestScoreUserName=="Unknown"){
-                            //addUnknownFace(subject)
-                        }
+                        addUnknown = if(bestScoreUserName == "Unknown")
+                            UnknownPerson(subject,croppedBitmap)
+                        else
+                            null
                     }
 
                 }
@@ -195,9 +198,6 @@ class FrameAnalyser(
                 }
             }
             withContext( Dispatchers.Main ) {
-                // Clear the BoundingBoxOverlay and set the new results ( boxes ) to be displayed.
-
-
                 isProcessing = false
             }
         }
@@ -225,5 +225,7 @@ class FrameAnalyser(
     fun takePicture(){
         takePicture = false
     }
+
+    class UnknownPerson(val embeddings : FloatArray, val bitmap: Bitmap)
 
 }

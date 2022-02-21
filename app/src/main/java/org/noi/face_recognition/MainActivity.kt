@@ -119,11 +119,13 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "No serialized data was found.")
         }
 
-        button.setOnClickListener { frameAnalyser.takePicture() }
-
+        button.setOnClickListener {
+            frameAnalyser.takePicture()
+            if(frameAnalyser.addUnknown!=null){
+                frameAnalyser.addUnknown?.let { addUnknownFace(it.embeddings, it.bitmap) }
+            }
+        }
     }
-
-    // ---------------------------------------------- //
 
     // Attach the camera stream to the PreviewView.
     private fun startCameraPreview() {
@@ -173,7 +175,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun addUnknownFace(embeddings : FloatArray, croppedBitmap: Bitmap){
         val builder = AlertDialog.Builder(this)
-        val dialogLayout = layoutInflater.inflate(R.layout.unknown_person_dialog,viewBinding.root)
+        val dialogLayout = layoutInflater.inflate(R.layout.unknown_person_dialog,null)
 
         val picture = dialogLayout.findViewById<ImageView>(R.id.dlg_image)
         picture.setImageBitmap(croppedBitmap)
@@ -188,7 +190,8 @@ class MainActivity : AppCompatActivity() {
             frameAnalyser.faceList.add(pair)
             dialogInterface.dismiss()
         }
-
+        builder.setView(dialogLayout)
+        builder.show()
     }
 
     override fun onDestroy() {
