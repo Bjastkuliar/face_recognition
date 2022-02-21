@@ -24,7 +24,7 @@ class Models {
 
         val FACENET_QUANTIZED = ModelInfo(
             "FaceNet Quantized" ,
-            "facenet_int_quantized.tflite" ,
+            "face_net_int_quantized.tflite" ,
             0.4f ,
             10f ,
             128 ,
@@ -33,7 +33,7 @@ class Models {
 
         val FACENET_512_QUANTIZED = ModelInfo(
             "FaceNet-512 Quantized" ,
-            "facenet_512_int_quantized.tflite" ,
+            "face_net_512_int_quantized.tflite" ,
             0.3f ,
             23.56f ,
             512 ,

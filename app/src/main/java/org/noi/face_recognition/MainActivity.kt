@@ -70,7 +70,7 @@ class MainActivity : AppCompatActivity() {
     // You may the change the models here.
     // Use the model configs in Models.kt
     // Default is Models.FACENET ; Quantized models are faster
-    private val modelInfo = Models.FACENET
+    private val modelInfo = Models.FACENET_QUANTIZED
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,6 +122,7 @@ class MainActivity : AppCompatActivity() {
         button.setOnClickListener {
             frameAnalyser.takePicture()
             if(frameAnalyser.addUnknown!=null){
+                Log.d(TAG,"Unknown face detected")
                 frameAnalyser.addUnknown?.let { addUnknownFace(it.embeddings, it.bitmap) }
             }
         }
@@ -188,6 +189,7 @@ class MainActivity : AppCompatActivity() {
             }
             val pair = Pair<String, FloatArray>(name,embeddings)
             frameAnalyser.faceList.add(pair)
+            textView.text=getString(R.string.result,name)
             dialogInterface.dismiss()
         }
         builder.setView(dialogLayout)
