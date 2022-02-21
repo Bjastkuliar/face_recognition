@@ -15,12 +15,15 @@
 package org.noi.face_recognition.image
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import android.widget.TextView
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.fragment.app.DialogFragment
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
@@ -71,10 +74,12 @@ class FrameAnalyser(
 
     // <-------------------------------------------------------->
 
+    private var takePicture = true
+
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(image: ImageProxy) {
         // If the previous frame is still being processed, then skip this frame
-        if ( isProcessing || faceList.size == 0 ) {
+        if ( takePicture || isProcessing || faceList.size == 0 ) {
             image.close()
             return
         }
@@ -176,6 +181,10 @@ class FrameAnalyser(
                         }
                         Log.d(TAG, "Person identified as $bestScoreUserName" )
                         updateTextView(bestScoreUserName)
+                        takePicture = true
+                        if(bestScoreUserName=="Unknown"){
+                            //addUnknownFace(subject)
+                        }
                     }
 
                 }
@@ -211,6 +220,10 @@ class FrameAnalyser(
 
     private fun updateTextView(name : String){
         textView.text = context.getString(R.string.result,name)
+    }
+
+    fun takePicture(){
+        takePicture = false
     }
 
 }

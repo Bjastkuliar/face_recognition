@@ -17,6 +17,7 @@ package org.noi.face_recognition
 import android.Manifest
 import android.app.AlertDialog
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -29,8 +30,7 @@ import android.util.Log
 import android.util.Size
 import android.view.View
 import android.view.WindowInsets
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -46,29 +46,26 @@ import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
 import org.noi.face_recognition.data.FileIO
 import org.noi.face_recognition.data.FileReader
+import org.noi.face_recognition.databinding.ActivityMainBinding
 import org.noi.face_recognition.image.BitmapUtils
 import org.noi.face_recognition.image.FrameAnalyser
 import org.noi.face_recognition.model.FaceNetModel
 import org.noi.face_recognition.model.Models
 import java.util.concurrent.Executors
 
-// Shared Pref key to check if the data was stored.
-private const val SHARED_PREF_IS_DATA_STORED_KEY = "is_data_stored"
-
 private const val TAG = "MainActivity"
 
 class MainActivity : AppCompatActivity() {
-
-    private var isSerializedDataStored = false
 
     private lateinit var previewView : PreviewView
     private lateinit var frameAnalyser  : FrameAnalyser
     private lateinit var faceNetModel : FaceNetModel
     private lateinit var fileReader : FileReader
     private lateinit var cameraProviderFuture : ListenableFuture<ProcessCameraProvider>
-    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var fileIO : FileIO
     private lateinit var textView: TextView
+    private lateinit var button : Button
+    private lateinit var viewBinding : ActivityMainBinding
 
     // You may the change the models here.
     // Use the model configs in Models.kt
@@ -77,6 +74,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        viewBinding = ActivityMainBinding.inflate(layoutInflater)
 
         // Remove the status bar to have a full screen experience
         // See this answer on SO -> https://stackoverflow.com/a/68152688/10878733
@@ -89,13 +88,13 @@ class MainActivity : AppCompatActivity() {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
 
         }
-        setContentView(R.layout.activity_main)
+        setContentView(viewBinding.root)
 
         // Implementation of CameraX preview and the Feedback TextView
         previewView = findViewById( R.id.preview_view )
         textView = findViewById(R.id.textView)
         textView.text=getString(R.string.result,"Unknown")
-
+        button = findViewById(R.id.button)
 
         faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
         frameAnalyser = FrameAnalyser(this, faceNetModel, textView)
@@ -112,8 +111,6 @@ class MainActivity : AppCompatActivity() {
             startCameraPreview()
         }
 
-        sharedPreferences = getSharedPreferences( getString( R.string.app_name ) , Context.MODE_PRIVATE )
-        isSerializedDataStored = sharedPreferences.getBoolean( SHARED_PREF_IS_DATA_STORED_KEY , false )
         fileIO = FileIO(this,true)
         if(fileIO.hasSerializedData()){
             frameAnalyser.faceList=fileIO.loadSerializedImageData()
@@ -121,6 +118,8 @@ class MainActivity : AppCompatActivity() {
         } else {
             Log.d(TAG, "No serialized data was found.")
         }
+
+        button.setOnClickListener { frameAnalyser.takePicture() }
 
     }
 
@@ -149,111 +148,6 @@ class MainActivity : AppCompatActivity() {
         cameraProvider.bindToLifecycle(this as LifecycleOwner, cameraSelector, preview , imageFrameAnalysis  )
     }
 
-    // ---------------------------------------------- //
-
-
-    private fun launchChooseDirectoryIntent() {
-        val intent = Intent( Intent.ACTION_OPEN_DOCUMENT_TREE )
-        // startForActivityResult is deprecated.
-        // See this SO thread -> https://stackoverflow.com/questions/62671106/onactivityresult-method-is-deprecated-what-is-the-alternative
-        directoryAccessLauncher.launch( intent )
-    }
-
-
-    // Read the contents of the select directory here.
-    // The system handles the request code here as well.
-    // See this SO question -> https://stackoverflow.com/questions/47941357/how-to-access-files-in-a-directory-given-a-content-uri
-    private val directoryAccessLauncher = registerForActivityResult( ActivityResultContracts.StartActivityForResult() ) {
-        val dirUri = it.data?.data ?: return@registerForActivityResult
-        val childrenUri =
-            DocumentsContract.buildChildDocumentsUriUsingTree(
-                dirUri,
-                DocumentsContract.getTreeDocumentId( dirUri )
-            )
-        val tree = DocumentFile.fromTreeUri(this, childrenUri)
-        val images = ArrayList<Pair<String,Bitmap>>()
-        var errorFound = false
-        if ( tree!!.listFiles().isNotEmpty()) {
-            for ( doc in tree.listFiles() ) {
-                if ( doc.isDirectory && !errorFound ) {
-                    val name = doc.name!!
-                    for ( imageDocFile in doc.listFiles() ) {
-                        try {
-                            images.add( Pair( name , getFixedBitmap( imageDocFile.uri ) ) )
-                        }
-                        catch ( e : Exception ) {
-                            errorFound = true
-                            Log.d(
-                                TAG, "Could not parse an image in $name directory" )
-                            break
-                        }
-                    }
-                    Log.d(TAG, "Found ${doc.listFiles().size} images in $name directory" )
-                }
-                else {
-                    errorFound = true
-                    Log.d(
-                        TAG, "The selected folder should contain only directories" )
-                }
-            }
-        }
-        else {
-            errorFound = true
-            Log.d(
-                TAG, "The selected folder doesn't contain any directories" )
-        }
-        if ( !errorFound ) {
-            fileReader.run( images , fileReaderCallback )
-            Log.d(TAG, "Detecting faces in ${images.size} images ..." )
-        }
-        else {
-            val alertDialog = AlertDialog.Builder( this ).apply {
-                setTitle( "Error while parsing directory")
-                setMessage( "There were some errors while parsing the directory." )
-                setCancelable( false )
-                setPositiveButton( "RESELECT") { dialog, _ ->
-                    dialog.dismiss()
-                    launchChooseDirectoryIntent()
-                }
-                setNegativeButton( "CANCEL" ){ dialog, _ ->
-                    dialog.dismiss()
-                    finish()
-                }
-                create()
-            }
-            alertDialog.show()
-        }
-    }
-
-
-    // Get the image as a Bitmap from given Uri and fix the rotation using the Exif interface
-    // Source -> https://stackoverflow.com/questions/14066038/why-does-an-image-captured-using-camera-intent-gets-rotated-on-some-devices-on-a
-    private fun getFixedBitmap( imageFileUri : Uri ) : Bitmap {
-        var imageBitmap = BitmapUtils.getBitmapFromUri( contentResolver , imageFileUri )
-        val exifInterface = ExifInterface( contentResolver.openInputStream( imageFileUri )!! )
-        imageBitmap =
-            when (exifInterface.getAttributeInt( ExifInterface.TAG_ORIENTATION ,
-                ExifInterface.ORIENTATION_UNDEFINED )) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> BitmapUtils.rotateBitmap( imageBitmap , 90f )
-                ExifInterface.ORIENTATION_ROTATE_180 -> BitmapUtils.rotateBitmap( imageBitmap , 180f )
-                ExifInterface.ORIENTATION_ROTATE_270 -> BitmapUtils.rotateBitmap( imageBitmap , 270f )
-                else -> imageBitmap
-            }
-        return imageBitmap
-    }
-
-
-    // ---------------------------------------------- //
-
-
-    private val fileReaderCallback = object : FileReader.ProcessCallback {
-        override fun onProcessCompleted(data: ArrayList<Pair<String, FloatArray>>, numImagesWithNoFaces: Int) {
-            frameAnalyser.faceList = data
-            fileIO.saveSerializedImageData( data )
-            Log.d(TAG, "Images parsed. Found $numImagesWithNoFaces images with no faces." )
-        }
-    }
-
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<String>, grantResults:
         IntArray) {
@@ -275,6 +169,31 @@ class MainActivity : AppCompatActivity() {
     private fun allPermissionsGranted()= REQUIRED_PERMISSIONS.all{
         ContextCompat.checkSelfPermission(
             baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun addUnknownFace(embeddings : FloatArray, croppedBitmap: Bitmap){
+        val builder = AlertDialog.Builder(this)
+        val dialogLayout = layoutInflater.inflate(R.layout.unknown_person_dialog,viewBinding.root)
+
+        val picture = dialogLayout.findViewById<ImageView>(R.id.dlg_image)
+        picture.setImageBitmap(croppedBitmap)
+        val input = dialogLayout.findViewById<EditText>(R.id.dlg_input)
+
+        builder.setPositiveButton("OK"){ dialogInterface: DialogInterface, _: Int ->
+            val name = input.text.toString()
+            if(name.isEmpty()){
+                return@setPositiveButton
+            }
+            val pair = Pair<String, FloatArray>(name,embeddings)
+            frameAnalyser.faceList.add(pair)
+            dialogInterface.dismiss()
+        }
+
+    }
+
+    override fun onDestroy() {
+        fileIO.saveSerializedImageData(frameAnalyser.faceList)
+        super.onDestroy()
     }
 
     companion object{
