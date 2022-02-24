@@ -4,13 +4,10 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.content.DialogInterface
 import android.graphics.Bitmap
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.annotation.RequiresApi
 import androidx.fragment.app.DialogFragment
 import org.noi.face_recognition.image.FrameAnalyser
 

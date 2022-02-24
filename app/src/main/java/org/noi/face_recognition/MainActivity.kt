@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     // You may the change the models here.
     // Use the model configs in Models.kt
     // Default is Models.FACENET ; Quantized models are faster
-    private val modelInfo = Models.FACENET_512
+    private val modelInfo = Models.FACENET_QUANTIZED
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

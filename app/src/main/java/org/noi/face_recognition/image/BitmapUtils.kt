@@ -14,14 +14,9 @@
  */
 package org.noi.face_recognition.image
 
-import android.content.ContentResolver
 import android.graphics.*
 import android.media.Image
-import android.net.Uri
-import android.os.ParcelFileDescriptor
 import java.io.ByteArrayOutputStream
-import java.io.FileDescriptor
-import kotlin.math.ceil
 
 // Helper class for operations on Bitmaps
 class BitmapUtils {
@@ -44,20 +39,9 @@ class BitmapUtils {
         }
 
 
-        // Get the image as a Bitmap from given Uri
-        // Source -> https://developer.android.com/training/data-storage/shared/documents-files#bitmap
-        fun getBitmapFromUri( contentResolver : ContentResolver , uri: Uri): Bitmap {
-            val parcelFileDescriptor: ParcelFileDescriptor? = contentResolver.openFileDescriptor(uri, "r")
-            val fileDescriptor: FileDescriptor = parcelFileDescriptor!!.fileDescriptor
-            val image: Bitmap = BitmapFactory.decodeFileDescriptor(fileDescriptor)
-            parcelFileDescriptor.close()
-            return image
-        }
-
-
         // Rotate the given `source` by `degrees`.
         // See this SO answer -> https://stackoverflow.com/a/16219591/10878733
-        fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
+        private fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
             val matrix = Matrix()
             matrix.postRotate( degrees )
             return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix , false )
@@ -93,48 +77,5 @@ class BitmapUtils {
             output = rotateBitmap( output , rotationDegrees.toFloat() )
             return flipBitmap( output )
         }
-
-
-        // Convert the given Bitmap to NV21 ByteArray
-        // See this comment -> https://github.com/firebase/quickstart-android/issues/932#issuecomment-531204396
-        fun bitmapToNV21ByteArray(bitmap: Bitmap): ByteArray {
-            val argb = IntArray(bitmap.width * bitmap.height )
-            bitmap.getPixels(argb, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-            val yuv = ByteArray(bitmap.height * bitmap.width + 2 * ceil(bitmap.height / 2.0).toInt()
-                    * ceil(bitmap.width / 2.0).toInt())
-            encodeYUV420SP( yuv, argb, bitmap.width, bitmap.height)
-            return yuv
-        }
-
-        private fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
-            val frameSize = width * height
-            var yIndex = 0
-            var uvIndex = frameSize
-            var r: Int
-            var g: Int
-            var b: Int
-            var y: Int
-            var u: Int
-            var v: Int
-            var index = 0
-            for (j in 0 until height) {
-                for (i in 0 until width) {
-                    r = argb[index] and 0xff0000 shr 16
-                    g = argb[index] and 0xff00 shr 8
-                    b = argb[index] and 0xff shr 0
-                    y = (66 * r + 129 * g + 25 * b + 128 shr 8) + 16
-                    u = (-38 * r - 74 * g + 112 * b + 128 shr 8) + 128
-                    v = (112 * r - 94 * g - 18 * b + 128 shr 8) + 128
-                    yuv420sp[yIndex++] = (if (y < 0) 0 else if (y > 255) 255 else y).toByte()
-                    if (j % 2 == 0 && index % 2 == 0) {
-                        yuv420sp[uvIndex++] = (if (v < 0) 0 else if (v > 255) 255 else v).toByte()
-                        yuv420sp[uvIndex++] = (if (u < 0) 0 else if (u > 255) 255 else u).toByte()
-                    }
-                    index++
-                }
-            }
-        }
-
     }
-
 }

@@ -100,6 +100,7 @@ class FaceNetModel(context : Context,
     // x' = ( x - mean ) / std_dev
     class StandardizeOp : TensorOperator {
 
+        @Suppress("SimplifiableCallChain")
         override fun apply(p0: TensorBuffer?): TensorBuffer {
             val pixels = p0!!.floatArray
             val mean = pixels.average().toFloat()

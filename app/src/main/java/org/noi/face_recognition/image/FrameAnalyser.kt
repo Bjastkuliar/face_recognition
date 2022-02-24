@@ -77,8 +77,6 @@ class FrameAnalyser(
 
     private var takePicture = true
 
-    var addUnknown : UnknownPerson? = null
-
     /**
      * Implementation method of the ImageAnalysis class, which prepares the [image]
      * for analysis when the user clicks the button. Then hands everything to the runModel function
@@ -254,17 +252,6 @@ class FrameAnalyser(
     fun takePicture() {
         takePicture = false
     }
-
-    /**
-     * Simple internal data class for storing the information about the unknown person.
-     * This is needed in order to provide information to the unknown person dialog.
-     *
-     * @param embeddings the model output
-     * @param bitmap the image that has been analyzed
-     */
-
-    @Suppress("ArrayInDataClass")
-    data class UnknownPerson(val embeddings : FloatArray, val bitmap: Bitmap)
 
     /**
      * this method is called whenever an unknown person is found,
