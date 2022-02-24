@@ -16,22 +16,16 @@ package org.noi.face_recognition
 
 import android.Manifest
 import android.app.AlertDialog
-import android.content.Context
 import android.content.DialogInterface
-import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.DocumentsContract
 import android.util.Log
 import android.util.Size
 import android.view.View
 import android.view.WindowInsets
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -40,14 +34,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.documentfile.provider.DocumentFile
-import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
 import org.noi.face_recognition.data.FileIO
-import org.noi.face_recognition.data.FileReader
 import org.noi.face_recognition.databinding.ActivityMainBinding
-import org.noi.face_recognition.image.BitmapUtils
 import org.noi.face_recognition.image.FrameAnalyser
 import org.noi.face_recognition.model.FaceNetModel
 import org.noi.face_recognition.model.Models
@@ -60,7 +50,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewView : PreviewView
     private lateinit var frameAnalyser  : FrameAnalyser
     private lateinit var faceNetModel : FaceNetModel
-    private lateinit var fileReader : FileReader
     private lateinit var cameraProviderFuture : ListenableFuture<ProcessCameraProvider>
     private lateinit var fileIO : FileIO
     private lateinit var textView: TextView
@@ -98,7 +87,6 @@ class MainActivity : AppCompatActivity() {
 
         faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
         frameAnalyser = FrameAnalyser(this, faceNetModel, textView)
-        fileReader = FileReader( faceNetModel )
 
 
         // We'll only require the CAMERA permission from the user.
@@ -198,6 +186,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         fileIO.saveSerializedImageData(frameAnalyser.faceList)
+        fileIO.copyDeserializedDataToTextFile()
         super.onDestroy()
     }
 

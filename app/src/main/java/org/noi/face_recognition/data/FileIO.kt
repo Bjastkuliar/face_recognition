@@ -80,7 +80,9 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     /**
      * Simple method that converts the data file stored in the
      * data folder to a text file for analysis, is disabled by default.
-     * To enable specify the debugMode to true in the class initializer.**/
+     * To enable specify the debugMode to true in the class initializer.
+     * Since it copies the given file to a text one, it might be wiser to call
+     * this method after the saveSerializedImageData method.**/
     /*The @Suppress tag is needed because we are reading data which we are sure is in the correct
     format, hence the "Unchecked cast" is not really unchecked*/
     @Suppress("UNCHECKED_CAST")
