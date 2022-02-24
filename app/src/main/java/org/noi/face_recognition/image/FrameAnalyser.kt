@@ -100,9 +100,17 @@ class FrameAnalyser(
             val inputImage = InputImage.fromMediaImage(image.image!!, image.imageInfo.rotationDegrees )
             detector.process(inputImage)
                 .addOnSuccessListener { faces ->
-                    CoroutineScope( Dispatchers.Default ).launch {
-                        runModel( faces , frameBitmap )
+                    if(!faces.isNullOrEmpty()) {
+                        CoroutineScope(Dispatchers.Default).launch {
+                            runModel(faces, frameBitmap)
+                        }
+                    } else {
+                        Log.d(TAG,"No faces detected")
                     }
+                }
+                .addOnFailureListener {
+                    image.close()
+                    Log.e(TAG,"Failed to detect faces")
                 }
                 .addOnCompleteListener {
                     image.close()

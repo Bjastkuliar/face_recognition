@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.Log
 import java.io.*
 
-const val SERIALIZED_DATA_FILENAME = "image_data"
-const val TAG = "FileIO"
+private const val SERIALIZED_DATA_FILENAME = "image_data"
+private const val TAG = "FileIO"
 
 /**
  * Utility class for loading/unloading file data from-to
