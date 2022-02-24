@@ -7,6 +7,18 @@ import java.io.*
 const val SERIALIZED_DATA_FILENAME = "image_data"
 const val TAG = "FileIO"
 
+/**
+ * Utility class for loading/unloading file data from-to
+ * the activity itself, acts as a "gateway class" in order
+ * to easily swap-in/out the process of saving-loading data.
+ * making it easy to attach either a Room implementation or
+ * an external database.
+ *
+ * @author Alberto Nicoletti
+ * @param context the context of the main activity
+ * @param debugMode default set to false, enables copySerializedDataToTextFile
+ **/
+
 class FileIO(context: Context, debugMode : Boolean = false) {
 
     private val fileDirectory = context.filesDir
