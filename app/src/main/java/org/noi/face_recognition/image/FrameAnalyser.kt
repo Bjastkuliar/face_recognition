@@ -15,36 +15,37 @@
 package org.noi.face_recognition.image
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.app.Dialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import android.widget.TextView
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.FragmentManager
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
-import org.noi.face_recognition.model.FaceNetModel
-import org.noi.face_recognition.model.MaskDetectionModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.noi.face_recognition.R
+import org.noi.face_recognition.UnknownPersonDialogFragment
+import org.noi.face_recognition.model.FaceNetModel
+import org.noi.face_recognition.model.MaskDetectionModel
 import kotlin.math.pow
 import kotlin.math.sqrt
 
 private const val TAG = "FrameAnalyser"
 
+
 // Analyser class to process frames and produce detections.
 class FrameAnalyser(
     private val context: Context,
     private val model: FaceNetModel,
-    private val textView: TextView
+    private val textView: TextView,
+    private val fragmentManager: FragmentManager
 ) : ImageAnalysis.Analyzer {
 
     private val realTimeOpts = FaceDetectorOptions.Builder()
@@ -78,6 +79,11 @@ class FrameAnalyser(
 
     var addUnknown : UnknownPerson? = null
 
+    /**
+     * Implementation method of the ImageAnalysis class, which prepares the [image]
+     * for analysis when the user clicks the button. Then hands everything to the runModel function
+     * which asyncronously runs face recognition on the bitmap.
+     */
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(image: ImageProxy) {
         // If the previous frame is still being processed, then skip this frame
@@ -93,7 +99,6 @@ class FrameAnalyser(
                 BitmapUtils.imageToBitmap(image.image!!, image.imageInfo.rotationDegrees)
 
             // Configure frameHeight and frameWidth for output2overlay transformation matrix.
-
             val inputImage = InputImage.fromMediaImage(image.image!!, image.imageInfo.rotationDegrees )
             detector.process(inputImage)
                 .addOnSuccessListener { faces ->
@@ -108,13 +113,19 @@ class FrameAnalyser(
     }
 
 
-    private suspend fun runModel( faces : List<Face> , cameraFrameBitmap : Bitmap ){
+    /**
+     * Performs face detection on the given [cameraFrameBitmap], cropping it accordingly to the model
+     * used. Runs the model on the cropped bitmap and computes the similarity between the detected [faces]
+     * and the stored ones, assessing who it is according to the settings provided (either cosine similarity
+     * or l2 norm).
+     */
+    private suspend fun runModel(faces : List<Face>, cameraFrameBitmap : Bitmap ){
         withContext( Dispatchers.Default ) {
             for (face in faces) {
                 try {
-                    // Crop the frame using face.boundingBox.
-                    // Convert the cropped Bitmap to a ByteBuffer.
-                    // Finally, feed the ByteBuffer to the FaceNet model.
+                    /* Crop the frame using face.boundingBox.
+                     Convert the cropped Bitmap to a ByteBuffer.
+                     Finally, feed the ByteBuffer to the FaceNet model.*/
                     val croppedBitmap =
                         BitmapUtils.cropRectFromBitmap(cameraFrameBitmap, face.boundingBox)
                     subject = model.getFaceEmbedding( croppedBitmap )
@@ -127,13 +138,13 @@ class FrameAnalyser(
 
                     // Continue with the recognition if the user is not wearing a face mask
                     if (maskLabel == maskDetectionModel.noMask) {
-                        // Perform clustering ( grouping )
-                        // Store the clusters in a HashMap. Here, the key would represent the 'name'
-                        // of that cluster and ArrayList<Float> would represent the collection of all
-                        // L2 norms/ cosine distances.
+                        /* Perform clustering ( grouping )
+                         Store the clusters in a HashMap. Here, the key would represent the 'name'
+                         of that cluster and ArrayList<Float> would represent the collection of all
+                         L2 norms/ cosine distances.*/
                         for ( i in 0 until faceList.size ) {
-                            // If this cluster ( i.e an ArrayList with a specific key ) does not exist,
-                            // initialize a new one.
+                            /* If this cluster ( i.e an ArrayList with a specific key ) does not exist,
+                             initialize a new one.*/
                             if ( nameScoreHashmap[ faceList[ i ].first ] == null ) {
                                 // Compute the L2 norm and then append it to the ArrayList.
                                 val p = ArrayList<Float>()
@@ -166,6 +177,7 @@ class FrameAnalyser(
                         // Calculate the minimum L2 distance from the stored average L2 norms.
                         val bestScoreUserName: String = if ( metricToBeUsed == "cosine" ) {
                             // In case of cosine similarity, choose the highest value.
+                            @Suppress("SimplifiableCallChain")
                             if ( avgScores.maxOrNull()!! > model.model.cosineThreshold ) {
                                 names[ avgScores.indexOf( avgScores.maxOrNull()!! ) ]
                             }
@@ -184,10 +196,13 @@ class FrameAnalyser(
                         Log.d(TAG, "Person identified as $bestScoreUserName" )
                         updateTextView(bestScoreUserName)
                         takePicture = true
-                        addUnknown = if(bestScoreUserName == "Unknown")
-                            UnknownPerson(subject,croppedBitmap)
-                        else
-                            null
+
+                        /*Initializes the popup dialog which allows the user to input a new face
+                        * into the knowledge base*/
+                        if(bestScoreUserName == "Unknown"){
+                            createAndShowDialog(croppedBitmap)
+                            Log.d("addUnknown","Added unknown person")
+                        }
                     }
 
                 }
@@ -204,13 +219,18 @@ class FrameAnalyser(
     }
 
 
-    // Compute the L2 norm of ( x2 - x1 )
+    /**
+     * Computes the L2 norm of ( [x2] - [x1] )
+     */
     private fun l2Norm(x1 : FloatArray, x2 : FloatArray ) : Float {
         return sqrt( x1.mapIndexed{ i , xi -> (xi - x2[ i ]).pow( 2 ) }.sum() )
     }
 
 
-    // Compute the cosine of the angle between x1 and x2.
+    /**
+     * Computes the cosine of the angle between [x1] and [x2].
+     */
+    @Suppress("SimplifiableCallChain")
     private fun cosineSimilarity( x1 : FloatArray , x2 : FloatArray ) : Float {
         val mag1 = sqrt( x1.map { it * it }.sum() )
         val mag2 = sqrt( x2.map { it * it }.sum() )
@@ -218,14 +238,41 @@ class FrameAnalyser(
         return dot / (mag1 * mag2)
     }
 
+    /**
+     * Function which updates the feedback textView with
+     * the given [name].
+     */
     private fun updateTextView(name : String){
         textView.text = context.getString(R.string.result,name)
     }
 
-    fun takePicture(){
+    /**
+     * Very simple function that enables the frame analyzer to process one
+     * (and only one) image capture, implementing the "button behaviour" for
+     * the stream of pictures that is the CameraX's imageProxy
+     */
+    fun takePicture() {
         takePicture = false
     }
 
-    class UnknownPerson(val embeddings : FloatArray, val bitmap: Bitmap)
+    /**
+     * Simple internal data class for storing the information about the unknown person.
+     * This is needed in order to provide information to the unknown person dialog.
+     *
+     * @param embeddings the model output
+     * @param bitmap the image that has been analyzed
+     */
 
+    @Suppress("ArrayInDataClass")
+    data class UnknownPerson(val embeddings : FloatArray, val bitmap: Bitmap)
+
+    /**
+     * this method is called whenever an unknown person is found,
+     * it prompts a dialog with a [preview] of the detected face and
+     * allows to input the name of the shown face.
+     */
+    private fun  createAndShowDialog(preview: Bitmap){
+        val dialog = UnknownPersonDialogFragment(subject,preview,this,textView)
+        dialog.show(fragmentManager, "UnknownPersonDialogFragment")
+    }
 }

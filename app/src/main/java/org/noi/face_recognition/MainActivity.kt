@@ -1,31 +1,16 @@
-/*
- * Copyright 2021 Shubham Panchal
- * Licensed under the Apache License, Version 2.0 (the "License");
- * You may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.noi.face_recognition
 
 import android.Manifest
-import android.app.AlertDialog
-import android.content.DialogInterface
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Size
 import android.view.View
 import android.view.WindowInsets
-import android.widget.*
+import android.widget.Button
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -43,6 +28,13 @@ import org.noi.face_recognition.model.FaceNetModel
 import org.noi.face_recognition.model.Models
 import java.util.concurrent.Executors
 
+/**
+ * This class is responsible for initializing and loading all components of the application itself.
+ * It makes use of fileIO for loading/saving data, the image package handles all image-processing requests
+ * and finally the model package handles everything related to the model. Interaction with the user
+ * is handled through []
+ */
+
 private const val TAG = "MainActivity"
 
 class MainActivity : AppCompatActivity() {
@@ -59,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     // You may the change the models here.
     // Use the model configs in Models.kt
     // Default is Models.FACENET ; Quantized models are faster
-    private val modelInfo = Models.FACENET_QUANTIZED
+    private val modelInfo = Models.FACENET_512
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         button = findViewById(R.id.button)
 
         faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
-        frameAnalyser = FrameAnalyser(this, faceNetModel, textView)
+        frameAnalyser = FrameAnalyser(this, faceNetModel, textView, supportFragmentManager)
 
 
         // We'll only require the CAMERA permission from the user.
@@ -98,7 +90,7 @@ class MainActivity : AppCompatActivity() {
         else {
             startCameraPreview()
         }
-
+        //TODO: Remove debugMode
         fileIO = FileIO(this,true)
         if(fileIO.hasSerializedData()){
             frameAnalyser.faceList=fileIO.loadSerializedImageData()
@@ -109,10 +101,6 @@ class MainActivity : AppCompatActivity() {
 
         button.setOnClickListener {
             frameAnalyser.takePicture()
-            if(frameAnalyser.addUnknown!=null){
-                Log.d(TAG,"Unknown face detected")
-                frameAnalyser.addUnknown?.let { addUnknownFace(it.embeddings, it.bitmap) }
-            }
         }
     }
 
@@ -160,28 +148,6 @@ class MainActivity : AppCompatActivity() {
     private fun allPermissionsGranted()= REQUIRED_PERMISSIONS.all{
         ContextCompat.checkSelfPermission(
             baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun addUnknownFace(embeddings : FloatArray, croppedBitmap: Bitmap){
-        val builder = AlertDialog.Builder(this)
-        val dialogLayout = layoutInflater.inflate(R.layout.unknown_person_dialog,null)
-
-        val picture = dialogLayout.findViewById<ImageView>(R.id.dlg_image)
-        picture.setImageBitmap(croppedBitmap)
-        val input = dialogLayout.findViewById<EditText>(R.id.dlg_input)
-
-        builder.setPositiveButton("OK"){ dialogInterface: DialogInterface, _: Int ->
-            val name = input.text.toString()
-            if(name.isEmpty()){
-                return@setPositiveButton
-            }
-            val pair = Pair<String, FloatArray>(name,embeddings)
-            frameAnalyser.faceList.add(pair)
-            textView.text=getString(R.string.result,name)
-            dialogInterface.dismiss()
-        }
-        builder.setView(dialogLayout)
-        builder.show()
     }
 
     override fun onDestroy() {
