@@ -33,7 +33,6 @@ import kotlinx.coroutines.withContext
 import org.noi.face_recognition.R
 import org.noi.face_recognition.UnknownPersonDialogFragment
 import org.noi.face_recognition.model.FaceNetModel
-import org.noi.face_recognition.model.MaskDetectionModel
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -63,15 +62,10 @@ class FrameAnalyser(
     // Where String -> name of the person and FloatArray -> Embedding of the face.
     var faceList = ArrayList<Pair<String,FloatArray>>()
 
-    private val maskDetectionModel = MaskDetectionModel( context )
-
     // <-------------- User controls --------------------------->
 
     // Use any one of the two metrics, "cosine" or "l2"
     private val metricToBeUsed = "l2"
-
-    // Use this variable to enable/disable mask detection.
-    private val isMaskDetectionOn = true
 
     // <-------------------------------------------------------->
 
@@ -136,80 +130,79 @@ class FrameAnalyser(
                         BitmapUtils.cropRectFromBitmap(cameraFrameBitmap, face.boundingBox)
                     subject = model.getFaceEmbedding( croppedBitmap )
 
-                    // Perform face mask detection on the cropped frame Bitmap.
-                    var maskLabel = ""
-                    if ( isMaskDetectionOn ) {
-                        maskLabel = maskDetectionModel.detectMask( croppedBitmap )
-                    }
-
-                    // Continue with the recognition if the user is not wearing a face mask
-                    if (maskLabel == maskDetectionModel.noMask) {
-                        /* Perform clustering ( grouping )
+                    /* Perform clustering ( grouping )
                          Store the clusters in a HashMap. Here, the key would represent the 'name'
                          of that cluster and ArrayList<Float> would represent the collection of all
                          L2 norms/ cosine distances.*/
-                        for ( i in 0 until faceList.size ) {
+                        for (i in 0 until faceList.size) {
                             /* If this cluster ( i.e an ArrayList with a specific key ) does not exist,
                              initialize a new one.*/
-                            if ( nameScoreHashmap[ faceList[ i ].first ] == null ) {
+                            if (nameScoreHashmap[faceList[i].first] == null) {
                                 // Compute the L2 norm and then append it to the ArrayList.
                                 val p = ArrayList<Float>()
-                                if ( metricToBeUsed == "cosine" ) {
-                                    p.add( cosineSimilarity( subject , faceList[ i ].second ) )
+                                if (metricToBeUsed == "cosine") {
+                                    p.add(cosineSimilarity(subject, faceList[i].second))
+                                } else {
+                                    p.add(l2Norm(subject, faceList[i].second))
                                 }
-                                else {
-                                    p.add( l2Norm( subject , faceList[ i ].second ) )
-                                }
-                                nameScoreHashmap[ faceList[ i ].first ] = p
+                                nameScoreHashmap[faceList[i].first] = p
                             }
                             // If this cluster exists, append the L2 norm/cosine score to it.
                             else {
-                                if ( metricToBeUsed == "cosine" ) {
-                                    nameScoreHashmap[ faceList[ i ].first ]?.add( cosineSimilarity( subject , faceList[ i ].second ) )
-                                }
-                                else {
-                                    nameScoreHashmap[ faceList[ i ].first ]?.add( l2Norm( subject , faceList[ i ].second ) )
+                                if (metricToBeUsed == "cosine") {
+                                    nameScoreHashmap[faceList[i].first]?.add(
+                                        cosineSimilarity(
+                                            subject,
+                                            faceList[i].second
+                                        )
+                                    )
+                                } else {
+                                    nameScoreHashmap[faceList[i].first]?.add(
+                                        l2Norm(
+                                            subject,
+                                            faceList[i].second
+                                        )
+                                    )
                                 }
                             }
                         }
 
                         // Compute the average of all scores norms for each cluster.
-                        val avgScores = nameScoreHashmap.values.map{ scores -> scores.toFloatArray().average() }
-                        Log.d(TAG, "Average score for each user : $nameScoreHashmap" )
+                        val avgScores = nameScoreHashmap.values.map { scores ->
+                            scores.toFloatArray().average()
+                        }
+                        Log.d(TAG, "Average score for each user : $nameScoreHashmap")
 
                         val names = nameScoreHashmap.keys.toTypedArray()
                         nameScoreHashmap.clear()
 
                         // Calculate the minimum L2 distance from the stored average L2 norms.
-                        val bestScoreUserName: String = if ( metricToBeUsed == "cosine" ) {
+                        val bestScoreUserName: String = if (metricToBeUsed == "cosine") {
                             // In case of cosine similarity, choose the highest value.
                             @Suppress("SimplifiableCallChain")
-                            if ( avgScores.maxOrNull()!! > model.model.cosineThreshold ) {
-                                names[ avgScores.indexOf( avgScores.maxOrNull()!! ) ]
-                            }
-                            else {
+                            if (avgScores.maxOrNull()!! > model.model.cosineThreshold) {
+                                names[avgScores.indexOf(avgScores.maxOrNull()!!)]
+                            } else {
                                 "Unknown"
                             }
                         } else {
                             // In case of L2 norm, choose the lowest value.
-                            if ( avgScores.minOrNull()!! > model.model.l2Threshold ) {
+                            if (avgScores.minOrNull()!! > model.model.l2Threshold) {
                                 "Unknown"
-                            }
-                            else {
-                                names[ avgScores.indexOf( avgScores.minOrNull()!! ) ]
+                            } else {
+                                names[avgScores.indexOf(avgScores.minOrNull()!!)]
                             }
                         }
-                        Log.d(TAG, "Person identified as $bestScoreUserName" )
+                        Log.d(TAG, "Person identified as $bestScoreUserName")
                         updateTextView(bestScoreUserName)
                         takePicture = true
 
                         /*Initializes the popup dialog which allows the user to input a new face
                         * into the knowledge base*/
-                        if(bestScoreUserName == "Unknown"){
+                        if (bestScoreUserName == "Unknown") {
                             createAndShowDialog(croppedBitmap)
-                            Log.d("addUnknown","Added unknown person")
+                            Log.d("addUnknown", "Added unknown person")
                         }
-                    }
 
                 }
                 catch ( e : Exception ) {
