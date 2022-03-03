@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.noi.face_recognition.image
 
 import android.annotation.SuppressLint
@@ -38,6 +39,14 @@ import kotlin.math.sqrt
 
 private const val TAG = "FrameAnalyser"
 
+/**
+ * Implementation of [ImageAnalysis.Analyzer] which is modified in order to answer to an event
+ * through the [takePicture] method. Unless this method is called the analyzer drops all frames.
+ * Can be adjusted to use cosine similarity instead of l2 norm by adjusting [metricToBeUsed].
+ *
+ * @author Alberto Nicoletti
+ * @author Shubham Panchal
+ */
 
 // Analyser class to process frames and produce detections.
 class FrameAnalyser(
@@ -74,7 +83,7 @@ class FrameAnalyser(
     /**
      * Implementation method of the ImageAnalysis class, which prepares the [image]
      * for analysis when the user clicks the button. Then hands everything to the runModel function
-     * which asyncronously runs face recognition on the bitmap.
+     * which asyncronously runs face recognition on the [Bitmap].
      */
     @SuppressLint("UnsafeOptInUsageError")
     override fun analyze(image: ImageProxy) {

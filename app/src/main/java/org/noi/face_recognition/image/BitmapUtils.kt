@@ -23,7 +23,9 @@ class BitmapUtils {
 
     companion object {
 
-        // Crop the given bitmap with the given rect.
+        /**
+         * Applies the given [rect] crop to the specified [source].
+         */
         fun cropRectFromBitmap(source: Bitmap, rect: Rect): Bitmap {
             var width = rect.width()
             var height = rect.height()
@@ -33,13 +35,13 @@ class BitmapUtils {
             if ((rect.top + height) > source.height) {
                 height = source.height - rect.top
             }
-            // Uncomment the below line if you want to save the input image.
-            // BitmapUtils.saveBitmap( context , croppedBitmap , "source" )
             return Bitmap.createBitmap(source, rect.left, rect.top, width, height)
         }
 
 
-        // Rotate the given `source` by `degrees`.
+        /**
+         * Rotates the given [source] by the amount of [degrees] specified.
+         */
         // See this SO answer -> https://stackoverflow.com/a/16219591/10878733
         private fun rotateBitmap( source: Bitmap , degrees : Float ): Bitmap {
             val matrix = Matrix()
@@ -48,7 +50,9 @@ class BitmapUtils {
         }
 
 
-        // Flip the given `Bitmap` horizontally.
+        /**
+         * Flips the [source] horizontally.
+         */
         // See this SO answer -> https://stackoverflow.com/a/36494192/10878733
         private fun flipBitmap( source: Bitmap ): Bitmap {
             val matrix = Matrix()
@@ -56,7 +60,9 @@ class BitmapUtils {
             return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
         }
 
-        // Convert android.media.Image to android.graphics.Bitmap
+        /**
+         * Converts the given [image] into a [Bitmap].
+         */
         // See the SO answer -> https://stackoverflow.com/a/44486294/10878733
         fun imageToBitmap( image : Image , rotationDegrees : Int ): Bitmap {
             val yBuffer = image.planes[0].buffer

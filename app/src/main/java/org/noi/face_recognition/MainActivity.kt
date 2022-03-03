@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Alberto Nicoletti
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.noi.face_recognition
 
 import android.Manifest
@@ -33,6 +48,8 @@ import java.util.concurrent.Executors
  * It makes use of fileIO for loading/saving data, the image package handles all image-processing requests
  * and finally the model package handles everything related to the model. Interaction with the user
  * is handled through []
+ *
+ * @author Alberto Nicoletti
  */
 
 private const val TAG = "MainActivity"
