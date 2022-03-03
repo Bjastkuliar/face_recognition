@@ -1,11 +1,26 @@
+/*
+ * Copyright 2022 Alberto Nicoletti
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.noi.face_recognition.data
 
 import android.content.Context
 import android.util.Log
 import java.io.*
 
-const val SERIALIZED_DATA_FILENAME = "image_data"
-const val TAG = "FileIO"
+private const val SERIALIZED_DATA_FILENAME = "image_data"
+private const val TAG = "FileIO"
 
 /**
  * Utility class for loading/unloading file data from-to
@@ -26,7 +41,7 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     private var assets = false
     private val assetManager = context.assets
 
-    /**Saves the provided pair Arraylist to file**/
+    /**Saves the provided [data] to file**/
     fun saveSerializedImageData(data : ArrayList<Pair<String,FloatArray>>) {
         val serializedDataFile = File( fileDirectory , SERIALIZED_DATA_FILENAME )
         Log.d(TAG,"Saving data at ${serializedDataFile.canonicalPath}")
@@ -99,7 +114,6 @@ class FileIO(context: Context, debugMode : Boolean = false) {
     format, hence the "Unchecked cast" is not really unchecked*/
     @Suppress("UNCHECKED_CAST")
     fun copyDeserializedDataToTextFile(){
-
         if(debug){
             val data : ArrayList<Pair<String,FloatArray>>
             //read from serialized file

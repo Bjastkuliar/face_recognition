@@ -35,7 +35,9 @@ import kotlin.math.sqrt
 
 private const val TAG = "FaceNetModel"
 
-// Utility class for FaceNet model
+/**
+ * Initializes the [model] and performs operations on the input.
+ */
 class FaceNetModel(context : Context,
                    var model : ModelInfo,
                    useGpu : Boolean,
@@ -73,14 +75,16 @@ class FaceNetModel(context : Context,
         Log.d(TAG,"Using ${model.name} model.")
     }
 
-
-    // Gets an face embedding using FaceNet.
+    /**
+     * Gets the embedding of a face from the given [image] using the specified [model]
+     */
     fun getFaceEmbedding( image : Bitmap ) : FloatArray {
         return runFaceNet( convertBitmapToBuffer( image ))[0]
     }
 
-
-    // Run the FaceNet model.
+    /**
+     * Runs the [model] on the [inputs]
+     */
     private fun runFaceNet(inputs: Any): Array<FloatArray> {
         val t1 = System.currentTimeMillis()
         val faceNetModelOutputs = Array( 1 ){ FloatArray( embeddingDim ) }
@@ -90,16 +94,25 @@ class FaceNetModel(context : Context,
     }
 
 
-    // Resize the given bitmap and convert it to a ByteBuffer
+
+    /**
+     * Resizes the given [image] to a fit the [imageTensorProcessor] input and
+     * converts it into a [ByteBuffer]
+     */
     private fun convertBitmapToBuffer( image : Bitmap) : ByteBuffer {
         return imageTensorProcessor.process( TensorImage.fromBitmap( image ) ).buffer
     }
 
 
-    // Op to perform standardization
+
+
+    /**
+     * Operator to perform standardization.
+     */
     // x' = ( x - mean ) / std_dev
     class StandardizeOp : TensorOperator {
 
+        @Suppress("SimplifiableCallChain")
         override fun apply(p0: TensorBuffer?): TensorBuffer {
             val pixels = p0!!.floatArray
             val mean = pixels.average().toFloat()
