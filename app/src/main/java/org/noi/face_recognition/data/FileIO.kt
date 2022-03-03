@@ -34,15 +34,14 @@ private const val TAG = "FileIO"
  * @param debugMode default set to false, enables copySerializedDataToTextFile
  **/
 
-class FileIO(context: Context, debugMode : Boolean = false) {
+class FileIO(context: Context, debugMode : Boolean = false) : IOTemplate {
 
     private val fileDirectory = context.filesDir
     private val debug = debugMode
     private var assets = false
     private val assetManager = context.assets
 
-    /**Saves the provided [data] to file**/
-    fun saveSerializedImageData(data : ArrayList<Pair<String,FloatArray>>) {
+    override fun saveSerializedImageData(data : ArrayList<Pair<String,FloatArray>>) {
         val serializedDataFile = File( fileDirectory , SERIALIZED_DATA_FILENAME )
         Log.d(TAG,"Saving data at ${serializedDataFile.canonicalPath}")
         ObjectOutputStream( FileOutputStream( serializedDataFile )  ).apply {
@@ -52,11 +51,10 @@ class FileIO(context: Context, debugMode : Boolean = false) {
         }
     }
 
-    /**Loads the saved data from the data folder into the application**/
     /*The @Suppress tag is needed because we are reading data which we are sure is in the correct
     format, hence the "Unchecked cast" is not really unchecked*/
     @Suppress("UNCHECKED_CAST")
-    fun loadSerializedImageData(): ArrayList<Pair<String,FloatArray>> {
+    override fun loadSerializedImageData(): ArrayList<Pair<String,FloatArray>> {
         var data: ArrayList<Pair<String, FloatArray>>
 
         try {
@@ -94,8 +92,7 @@ class FileIO(context: Context, debugMode : Boolean = false) {
         }
     }
 
-    /**Checks whether the image_data file exists in the data folder or among the assets**/
-    fun hasSerializedData() : Boolean{
+    override fun hasSerializedImageData() : Boolean{
         val file = File(fileDirectory, SERIALIZED_DATA_FILENAME)
         val assetList = assetManager.list("")
         if(file.exists()|| assetList?.contains(SERIALIZED_DATA_FILENAME) != false){
