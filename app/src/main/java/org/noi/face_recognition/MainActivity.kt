@@ -16,69 +16,63 @@
 package org.noi.face_recognition
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.graphics.Picture
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
-import android.util.Size
 import android.view.View
 import android.view.WindowInsets
-import android.widget.Button
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.core.app.ActivityCompat
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
-import com.google.common.util.concurrent.ListenableFuture
-import org.noi.face_recognition.data.FileIO
+import com.android.volley.Request
+import com.android.volley.RequestQueue
+import com.android.volley.Response
+import com.android.volley.toolbox.StringRequest
+import com.android.volley.toolbox.Volley
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.noi.face_recognition.databinding.ActivityMainBinding
-import org.noi.face_recognition.image.FrameAnalyser
-import org.noi.face_recognition.model.FaceNetModel
-import org.noi.face_recognition.model.Models
+import java.io.ByteArrayOutputStream
+import java.nio.charset.Charset
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-/**
- * This class is responsible for initializing and loading all components of the application itself.
- * It makes use of fileIO for loading/saving data, the image package handles all image-processing requests
- * and finally the model package handles everything related to the model. Interaction with the user
- * is handled through []
- *
- * @author Alberto Nicoletti
- */
-
-private const val TAG = "MainActivity"
-
-//TODO: Remove mask detection?
+private const val TAG = "Main"
+private const val RTAG="MyTag"
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var previewView : PreviewView
-    private lateinit var frameAnalyser  : FrameAnalyser
-    private lateinit var faceNetModel : FaceNetModel
-    private lateinit var cameraProviderFuture : ListenableFuture<ProcessCameraProvider>
-    private lateinit var fileIO : FileIO
-    private lateinit var textView: TextView
-    private lateinit var button : Button
+    private var imageCapture  : ImageCapture? = null
     private lateinit var viewBinding : ActivityMainBinding
-
-    // You may the change the models here.
-    // Use the model configs in Models.kt
-    // Default is Models.FACENET ; Quantized models are faster
-    private val modelInfo = Models.FACENET
+    private lateinit var cameraExecutor: ExecutorService
+    private lateinit var queue:RequestQueue
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(viewBinding.root)
 
-        // Remove the status bar to have a full screen experience
-        // See this answer on SO -> https://stackoverflow.com/a/68152688/10878733
+        if(allPermissionsGranted()){
+            startCamera()
+        } else {
+            requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.decorView.windowInsetsController!!
                 .hide( WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
@@ -88,62 +82,101 @@ class MainActivity : AppCompatActivity() {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
 
         }
-        setContentView(viewBinding.root)
 
-        // Implementation of CameraX preview and the Feedback TextView
-        previewView = findViewById( R.id.preview_view )
-        textView = findViewById(R.id.textView)
-        textView.text=getString(R.string.result,"Unknown")
-        button = findViewById(R.id.button)
+        queue = Volley.newRequestQueue(applicationContext)
 
-        faceNetModel = FaceNetModel( this , modelInfo , useGpu = true , useXNNPack = true)
-        frameAnalyser = FrameAnalyser(this, faceNetModel, textView, supportFragmentManager)
+        viewBinding.button.setOnClickListener { takePhoto()}
 
+        cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // We'll only require the CAMERA permission from the user.
-        // For scoped storage, particularly for accessing documents, we won't require WRITE_EXTERNAL_STORAGE or
-        // READ_EXTERNAL_STORAGE permissions. See https://developer.android.com/training/data-storage
-        if ( !allPermissionsGranted() ) {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
-        }
-        else {
-            startCameraPreview()
-        }
-        //TODO: Remove debugMode
-        fileIO = FileIO(this,true)
-        if(fileIO.hasSerializedData()){
-            frameAnalyser.faceList=fileIO.loadSerializedImageData()
-            Log.d(TAG, "Serialized data loaded.")
-        } else {
-            Log.d(TAG, "No serialized data was found.")
-        }
-
-        button.setOnClickListener {
-            frameAnalyser.takePicture()
-        }
     }
 
     // Attach the camera stream to the PreviewView.
-    private fun startCameraPreview() {
-        cameraProviderFuture = ProcessCameraProvider.getInstance( this )
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            bindPreview(cameraProvider) },
-            ContextCompat.getMainExecutor(this) )
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            /*val preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(viewBinding.previewView.surfaceProvider)
+                }*/
+
+            imageCapture = ImageCapture.Builder()
+                .build()
+
+            // Select back camera as a default
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                    this, cameraSelector, imageCapture)
+
+            } catch(exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
+            }
+
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun bindPreview(cameraProvider : ProcessCameraProvider) {
-        val preview : Preview = Preview.Builder().build()
-        val cameraSelector : CameraSelector = CameraSelector.Builder()
-            .requireLensFacing( CameraSelector.LENS_FACING_FRONT )
+    private fun takePhoto() {
+        // Get a stable reference of the modifiable image capture use case
+        val imageCapture = imageCapture?: return
+
+        // Create time stamped name and MediaStore entry.
+        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
+            .format(System.currentTimeMillis())
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
+            }
+        }
+
+        // Create output options object which contains file + metadata
+        val outputOptions = ImageCapture.OutputFileOptions
+            .Builder(contentResolver,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues)
             .build()
-        preview.setSurfaceProvider( previewView.surfaceProvider )
-        val imageFrameAnalysis = ImageAnalysis.Builder()
-            .setTargetResolution(Size( 480, 640 ) )
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-        imageFrameAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), frameAnalyser )
-        cameraProvider.bindToLifecycle(this as LifecycleOwner, cameraSelector, preview , imageFrameAnalysis  )
+
+        // Set up image capture listener, which is triggered after photo has
+        // been taken
+        imageCapture.takePicture(
+            outputOptions,
+            ContextCompat.getMainExecutor(this),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                }
+
+                override fun
+                        onImageSaved(output: ImageCapture.OutputFileResults){
+                    val msg = "Photo capture succeeded: ${output.savedUri}"
+
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(baseContext.contentResolver,
+                            output.savedUri!!
+                        ))
+                    } else {
+                        MediaStore.Images.Media.getBitmap(baseContext.contentResolver, output.savedUri)
+                    }
+                    //send(bitmap)
+
+                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+                    Log.d(TAG, msg)
+                }
+            }
+        )
     }
 
     override fun onRequestPermissionsResult(
@@ -151,7 +184,7 @@ class MainActivity : AppCompatActivity() {
         IntArray) {
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
-                startCameraPreview()
+                startCamera()
             } else {
                 Toast.makeText(this,
                     "Permissions not granted by the user.",
@@ -169,21 +202,62 @@ class MainActivity : AppCompatActivity() {
             baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    override fun onDestroy() {
-        fileIO.saveSerializedImageData(frameAnalyser.faceList)
-        fileIO.copyDeserializedDataToTextFile()
-        super.onDestroy()
-    }
-
     companion object{
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS =
             mutableListOf(
-                Manifest.permission.CAMERA
+                Manifest.permission.CAMERA,
+                Manifest.permission.INTERNET
             ).apply {
                 if(Build.VERSION.SDK_INT <= Build.VERSION_CODES.P){
                     add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             }.toTypedArray()
+    }
+
+    private fun send(bitmap: Bitmap){
+
+        val url = "http://10.11.145.3:5000/file_upload"
+
+        val multipartRequest : CustomVolleyMultipartRequest = object : CustomVolleyMultipartRequest(
+            Method.POST, url,
+            {
+                Log.d("response", responseToString(it.data))
+            },{
+                Log.e("GotError", "" + it.message)
+            }
+        ) {
+            @Suppress("UNUSED_PARAMETER")
+            override var byteData: Map<String, DataPart>
+                get() = super.byteData
+                set(value) {
+                    val params: MutableMap<String, DataPart> = HashMap()
+                    val imagename = System.currentTimeMillis()
+                    params["image"] = DataPart("$imagename.png", getFileDataFromDrawable(bitmap))
+                }
+        }
+
+        queue.add(multipartRequest)
+
+    }
+
+    fun getFileDataFromDrawable(bitmap: Bitmap): ByteArray {
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 80, byteArrayOutputStream)
+        return byteArrayOutputStream.toByteArray()
+    }
+
+    private fun responseToString(array: ByteArray): String {
+        val builder = StringBuilder()
+        for (aByte in array) {
+            builder.append(aByte.toInt()).append(" ")
+        }
+        return builder.toString()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        cameraExecutor.shutdown()
+        queue.cancelAll(TAG)
     }
 }
