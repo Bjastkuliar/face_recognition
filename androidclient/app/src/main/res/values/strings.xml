@@ -6,4 +6,5 @@
     <string name="button">Who am I?</string>
     <string name="edit_text_hind">Person Name</string>
     <string name="dlg_title">Add Unknown Face</string>
+    <string name="quit">QUIT</string>
 </resources>

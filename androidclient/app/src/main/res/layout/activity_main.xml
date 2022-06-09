@@ -18,9 +18,19 @@
         android:layout_height="wrap_content"
         android:text="@string/button"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toEndOf="@id/quit"
         app:layout_constraintBottom_toTopOf="@id/textView"
         android:layout_marginBottom="0dp"
+        />
+
+    <Button
+        android:id="@+id/quit"
+        android:text="@string/quit"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/button"
+        app:layout_constraintBottom_toTopOf="@id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         />
 
     <TextView

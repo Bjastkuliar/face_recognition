@@ -64,4 +64,7 @@ dependencies {
     //Android Volley
     implementation 'com.android.volley:volley:1.2.1'
 
+    //Temi SDK
+    implementation 'com.robotemi:sdk:0.10.80'
+
 }

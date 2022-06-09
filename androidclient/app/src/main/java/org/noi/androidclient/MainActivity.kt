@@ -18,8 +18,8 @@ package org.noi.androidclient
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.ImageDecoder
+import android.graphics.*
+import android.media.Image
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -28,17 +28,16 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.android.volley.RequestQueue
 import com.android.volley.toolbox.Volley
+import com.robotemi.sdk.Robot
+import com.robotemi.sdk.listeners.OnRobotReadyListener
 import org.noi.androidclient.databinding.ActivityMainBinding
 import java.io.ByteArrayOutputStream
-import java.lang.reflect.Method
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
@@ -47,18 +46,20 @@ import java.util.concurrent.Executors
 
 private const val TAG = "Main"
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), OnRobotReadyListener {
+
+    private lateinit var robot : Robot
 
     private var imageCapture  : ImageCapture? = null
     private lateinit var viewBinding : ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var queue:RequestQueue
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        viewBinding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(viewBinding.root)
+    @androidx.camera.core.ExperimentalGetImage
+    override fun onStart() {
+        super.onStart()
 
+        robot.addOnRobotReadyListener(this)
         if(allPermissionsGranted()){
             startCamera()
         } else {
@@ -79,7 +80,40 @@ class MainActivity : AppCompatActivity() {
 
         viewBinding.button.setOnClickListener { takePhoto()}
 
+        viewBinding.quit.setOnClickListener{
+            onStop()
+            onDestroy()
+        }
+
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+    }
+
+    override fun onRobotReady(isReady: Boolean) {
+        if (isReady) {
+            refreshTemiUi()
+        }
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        refreshTemiUi()
+    }
+
+    private fun refreshTemiUi() {
+        try {
+            val activityInfo = packageManager.getActivityInfo(componentName, PackageManager.GET_META_DATA)
+            Robot.getInstance().onStart(activityInfo)
+        } catch (e: PackageManager.NameNotFoundException) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        robot = Robot.getInstance()
+        viewBinding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(viewBinding.root)
 
     }
 
@@ -92,17 +126,14 @@ class MainActivity : AppCompatActivity() {
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
             // Preview
-            val preview = Preview.Builder()
+            /*val preview = Preview.Builder()
                 .build()
                 .also {
                     it.setSurfaceProvider(viewBinding.previewView.surfaceProvider)
-                }
+                }*/
 
             imageCapture = ImageCapture.Builder()
                 .build()
-
-            // Select back camera as a default
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
             try {
                 // Unbind use cases before rebinding
@@ -110,7 +141,7 @@ class MainActivity : AppCompatActivity() {
 
                 // Bind use cases to camera
                 cameraProvider.bindToLifecycle(
-                    this, cameraSelector,preview, imageCapture)
+                    this, CameraSelector.DEFAULT_FRONT_CAMERA, imageCapture)
 
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
@@ -119,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.camera.core.ExperimentalGetImage
     private fun takePhoto() {
         // Get a stable reference of the modifiable image capture use case
         val imageCapture = imageCapture?: return
@@ -128,7 +160,7 @@ class MainActivity : AppCompatActivity() {
             .format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
             if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
             }
@@ -144,28 +176,19 @@ class MainActivity : AppCompatActivity() {
         // Set up image capture listener, which is triggered after photo has
         // been taken
         imageCapture.takePicture(
-            outputOptions,
             ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    super.onCaptureSuccess(image)
+                    if(image.image!== null){
+                        send(toBitmap(image.image!!))
+                    } else {
+                        Log.e(TAG,"Image is null")
+                    }
                 }
 
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults){
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
-
-                    @Suppress("DEPRECATION") val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(baseContext.contentResolver,
-                            output.savedUri!!
-                        ))
-                    } else {
-                        MediaStore.Images.Media.getBitmap(baseContext.contentResolver, output.savedUri)
-                    }
-                    send(bitmap)
-
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
                 }
             }
         )
@@ -209,7 +232,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun send(bitmap: Bitmap){
 
-        val url = "http://10.11.145.3:5000/file_upload"
+        var imageName = ""
+
+        val url = "http://10.11.145.3:5000/recognition/${imageName}.png"
 
         val multipartRequest : CustomVolleyMultipartRequest = object : CustomVolleyMultipartRequest(
             Method.POST, url,
@@ -221,8 +246,8 @@ class MainActivity : AppCompatActivity() {
         ) {
             override fun getByteData(): MutableMap<String, DataPart> {
                 val params: MutableMap<String, DataPart> = HashMap()
-                val imagename = System.currentTimeMillis()
-                params["image"] = DataPart("$imagename.png", getFileDataFromDrawable(bitmap))
+                imageName = System.currentTimeMillis().toString()
+                params["image"] = DataPart("$imageName.png", getFileDataFromDrawable(bitmap))
                 return params
             }
         }
@@ -249,5 +274,25 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
         cameraExecutor.shutdown()
         queue.cancelAll(TAG)
+    }
+
+    private fun toBitmap(image: Image): Bitmap {
+        val planes: Array<Image.Plane> = image.planes
+        val yBuffer: ByteBuffer = planes[0].buffer
+        val uBuffer: ByteBuffer = planes[1].buffer
+        val vBuffer: ByteBuffer = planes[2].buffer
+        val ySize: Int = yBuffer.remaining()
+        val uSize: Int = uBuffer.remaining()
+        val vSize: Int = vBuffer.remaining()
+        val nv21 = ByteArray(ySize + uSize + vSize)
+        //U and V are swapped
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, yuvImage.width, yuvImage.height), 75, out)
+        val imageBytes = out.toByteArray()
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
     }
 }
