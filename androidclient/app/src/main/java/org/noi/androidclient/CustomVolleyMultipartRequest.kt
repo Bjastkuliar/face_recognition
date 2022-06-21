@@ -8,7 +8,7 @@ import kotlin.math.min
 
 // VolleyMultipartRequest.java
 open class CustomVolleyMultipartRequest(
-    method: Int, url: String?,
+    method: Int, url: String,
     private val mListener: Response.Listener<NetworkResponse>,
     private val mErrorListener: Response.ErrorListener
 ) : Request<NetworkResponse>(method, url, mErrorListener) {

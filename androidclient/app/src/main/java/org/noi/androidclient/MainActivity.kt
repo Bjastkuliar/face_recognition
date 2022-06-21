@@ -16,7 +16,6 @@
 package org.noi.androidclient
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.media.Image
@@ -44,8 +43,6 @@ import org.noi.androidclient.databinding.ActivityMainBinding
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
@@ -59,7 +56,7 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
 
     private lateinit var outputDirectory: File
 
-    private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
+    private var lensFacing: Int = CameraSelector.LENS_FACING_FRONT
     private lateinit var preview: Preview
     private lateinit var camera: Camera
     private lateinit var cameraProvider: ProcessCameraProvider
@@ -74,7 +71,6 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
     @androidx.camera.core.ExperimentalGetImage
     override fun onStart() {
         super.onStart()
-
         robot.addOnRobotReadyListener(this)
         if(allPermissionsGranted()){
             setUpCamera()
@@ -112,7 +108,7 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         imageCapture.let { imageCapture ->
 
             // Create output file to hold the image
-            val photoFile = File(outputDirectory, "image" + ".jpg")
+            val photoFile = File(outputDirectory, "image.jpg")
 
             if(photoFile.exists()){
                 if(photoFile.delete()){
@@ -120,16 +116,8 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
                 }
             }
 
-            // Setup image capture metadata
-            val metadata = ImageCapture.Metadata().apply {
-
-                // Mirror image when using the front camera
-                isReversedHorizontal = lensFacing == CameraSelector.LENS_FACING_FRONT
-            }
-
             // Create output options object which contains file + metadata
             val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile)
-                .setMetadata(metadata)
                 .build()
 
             // Setup image capture listener which is triggered after photo has been taken
@@ -143,11 +131,13 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
                         val savedUri = output.savedUri ?: Uri.fromFile(photoFile)
                         Log.d(TAG, "Photo capture succeeded: $savedUri")
 
-                        //ntent(android.hardware.Camera.ACTION_NEW_PICTURE, savedUri)
+                        //Intent(android.hardware.Camera.ACTION_NEW_PICTURE, savedUri)
 
                         // If the folder selected is an external media directory, this is
                         // unnecessary but otherwise other apps will not be able to access our
                         // images unless we scan them using [MediaScannerConnection]
+
+                        send(savedUri)
 
                         val mimeType = MimeTypeMap.getSingleton()
                             .getMimeTypeFromExtension(savedUri.toFile().extension)
@@ -156,27 +146,7 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
                             arrayOf(savedUri.toFile().absolutePath),
                             arrayOf(mimeType)
                         ) { _, uri ->
-                            Log.d(TAG, "Image capture scanned into media store: $uri")
-                            Thread {
-                                @Suppress("DEPRECATION")
-                                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                    ImageDecoder.decodeBitmap(
-                                        ImageDecoder.createSource(
-                                            baseContext.contentResolver,
-                                            savedUri
-                                        )
-                                    )
-                                } else {
-                                    MediaStore.Images.Media.getBitmap(
-                                        baseContext.contentResolver,
-                                        savedUri
-                                    )
-                                }
-                                Log.d("Thread", "Loaded Image via Thread from $savedUri")
-                                bitmap?.let { send(it) }
-                                Log.d("Thread", "Sent the image via Thread")
-
-                            }.start()
+                            Log.d(TAG,"New uri $uri")
                         }
                     }
                 })
@@ -218,16 +188,6 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
 
             // CameraProvider
             cameraProvider = cameraProviderFuture.get()
-
-            // Select lensFacing depending on the available cameras
-            lensFacing = when {
-                cameraProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.LENS_FACING_BACK
-                cameraProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.LENS_FACING_FRONT
-                else -> throw IllegalStateException("Back and front camera are unavailable")
-            }
-
-            // Enable or disable switching between cameras
-            //updateCameraSwitchButton()
 
             // Build and bind the camera use cases
             bindCameraUseCases()
@@ -420,13 +380,27 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         private const val RATIO_16_9_VALUE = 16.0 / 9.0
     }
 
-    private fun send(bitmap: Bitmap){
+    private fun send(savedUri: Uri){
+        @Suppress("DEPRECATION")
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            ImageDecoder.decodeBitmap(
+                ImageDecoder.createSource(
+                    baseContext.contentResolver,
+                    savedUri
+                )
+            )
+        } else {
+            MediaStore.Images.Media.getBitmap(
+                baseContext.contentResolver,
+                savedUri
+            )
+        }
 
-        var imageName = ""
+        var imageName = "picture"
 
-        val url = "http://10.11.145.3:5000/recognition/${imageName}.png"
+        val url = "http://10.11.145.3:5000/recognition/$imageName.jpg"
 
-        Log.d("Volley", "Sending image to $url")
+        Log.d("Volley", "Sending $imageName to $url")
 
         val multipartRequest : CustomVolleyMultipartRequest = object : CustomVolleyMultipartRequest(
             Method.POST, url,
@@ -487,6 +461,4 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         val imageBytes = out.toByteArray()
         return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
     }
-
-
 }
