@@ -2,19 +2,17 @@ package org.noi.androidclient_mobile
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowInsets
-import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import androidx.core.net.toFile
 import okhttp3.*
+import org.json.JSONObject
 import org.noi.androidclient.configuration.API
 import org.noi.androidclient_mobile.configuration.RetrofitClient
 import org.noi.androidclient_mobile.databinding.ActivityMainBinding
@@ -22,12 +20,14 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import java.io.File
-import java.io.IOException
+import java.io.UnsupportedEncodingException
+import java.net.UnknownHostException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+
 
 const val TAG = "MainActivity"
 
@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
 
         outputDirectory = applicationContext.filesDir
 
-        viewBinding.button.setOnClickListener { test() }
+        viewBinding.button.setOnClickListener { takePicture() }
 
         viewBinding.quit.setOnClickListener{
             onStop()
@@ -203,17 +203,8 @@ class MainActivity : AppCompatActivity() {
                     // unnecessary but otherwise other apps will not be able to access our
                     // images unless we scan them using [MediaScannerConnection]
 
-                    uploadImage(savedUri)
-
-                    val mimeType = MimeTypeMap.getSingleton()
-                        .getMimeTypeFromExtension(savedUri.toFile().extension)
-                    MediaScannerConnection.scanFile(
-                        baseContext,
-                        arrayOf(savedUri.toFile().absolutePath),
-                        arrayOf(mimeType)
-                    ) { _, uri ->
-                        Log.d(TAG,"New uri $uri")
-                    }
+                    //uploadImage(savedUri)
+                    uploadImage(File(savedUri!!.path!!))
                 }
             })
     }
@@ -229,8 +220,15 @@ class MainActivity : AppCompatActivity() {
     // Upload the image to the remote database
     fun uploadImage(savedUri: Uri) {
         val imageFile = File(savedUri.path!!) // Create a file using the absolute path of the image
-        val reqBody = RequestBody.create(MediaType.parse("multipart/form-file"), imageFile)
+        Log.d(TAG,"Absolute Path: ${imageFile.absolutePath}")
+        val reqBody = RequestBody.create(MultipartBody.FORM, imageFile)
+        Log.d(TAG, "Request Body Length: $reqBody")
+        Log.d(TAG, "Request Body Type: ${reqBody.contentType()}")
+        Log.d(TAG, "Request Body Length: ${reqBody.contentLength()}")
         val partImage = MultipartBody.Part.createFormData("file", imageFile.name, reqBody)
+        Log.d(TAG, "PartImage: $partImage")
+        Log.d(TAG, "PartImage Headers: ${partImage.headers()}")
+        Log.d(TAG, "PartImage Body: ${partImage.body()}")
         val api: API = RetrofitClient().getInstance().getAPI()
         val upload: Call<ResponseBody> = api.uploadImage(partImage)
 
@@ -248,35 +246,32 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    fun test(){
-
-        val IMGUR_CLIENT_ID = "9199fdef135c122";
-
-        val requestBody: RequestBody = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart("title", "Square Logo")
-            .addFormDataPart(
-                "image", "logo-square.png",
-                RequestBody.create(
-                    MediaType.get("image/png"),
-                    File(assets.toString()+"propic.png")
+    fun uploadImage(file: File?): JSONObject? {
+        try {
+            val MEDIA_TYPE_PNG = MediaType.parse("image/png")
+            val req: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("userid", "8457851245")
+                .addFormDataPart(
+                    "file",
+                    "image.png",
+                    RequestBody.create(MEDIA_TYPE_PNG, file!!)
                 )
-            )
-            .build()
-
-        val request: Request = Request.Builder()
-            .header("Authorization", "Client-ID $IMGUR_CLIENT_ID")
-            .url("https://api.imgur.com/3/image")
-            .post(requestBody)
-            .build()
-
-        val client = OkHttpClient()
-
-        Executors.newSingleThreadExecutor().execute{
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Unexpected code $response")
-                println(response.body()?.string() ?: "Response is null")
-            }
+                .build()
+            val request: Request = Request.Builder()
+                .url("http://192.168.1.3:5000/fileUpload/")
+                .post(req)
+                .build()
+            val client = OkHttpClient()
+            val response: okhttp3.Response = client.newCall(request).execute()
+            Log.d("response", "uploadImage:" + (response.body()?.string() ?: "Null response body"))
+            return JSONObject(response.body()?.string() ?: "empty response")
+        } catch (e: UnknownHostException) {
+            Log.e(TAG, "Error: " + e.localizedMessage)
+        } catch (e: UnsupportedEncodingException) {
+            Log.e(TAG, "Error: " + e.localizedMessage)
+        } catch (e: Exception) {
+            Log.e(TAG, "Other Error: " + e.localizedMessage)
         }
+        return null
     }
 }

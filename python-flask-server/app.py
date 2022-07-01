@@ -20,14 +20,16 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@app.route('/file_upload', methods=['GET', 'POST'])
+@app.route('/fileUpload/', methods=['GET', 'POST'])
 def file_upload():
     if request.method == 'POST':
+        print(request.files)
+        print(request.form)
         file = request.files['file']
-        PATH = FOLDER+'image.jpg'
-        if os.path.exists(PATH):
-            os.remove(PATH)
-        new_file = open(PATH, "x")
+        path = FOLDER+'image.jpg'
+        if os.path.exists(path):
+            os.remove(path)
+        new_file = open(path, "x")
 
         file.save(os.path.join(UPLOAD_FOLDER, secure_filename(file.filename)))
 
