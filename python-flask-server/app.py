@@ -40,21 +40,6 @@ def file_upload():
     return 'file_upload run'
 
 
-@app.route('/recognition/<image>', methods=["GET", "POST"])
-def recognition(image):
-    if request.method == 'POST':
-        file = request.files['image']
-        if os.path.exists(FOLDER+image):
-            os.remove(FOLDER+image)
-        new_file = open(FOLDER+image, "x")
-
-        file.save(os.path.join(UPLOAD_FOLDER, secure_filename(file.filename)))
-
-        print(file)
-        new_file.close()
-        return 'file received'
-
-
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':

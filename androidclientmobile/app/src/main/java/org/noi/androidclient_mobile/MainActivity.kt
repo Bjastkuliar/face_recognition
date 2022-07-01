@@ -13,12 +13,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import okhttp3.*
 import org.json.JSONObject
-import org.noi.androidclient.configuration.API
-import org.noi.androidclient_mobile.configuration.RetrofitClient
 import org.noi.androidclient_mobile.databinding.ActivityMainBinding
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
 import java.io.File
 import java.io.UnsupportedEncodingException
 import java.net.UnknownHostException
@@ -197,14 +192,7 @@ class MainActivity : AppCompatActivity() {
                     val savedUri = output.savedUri ?: Uri.fromFile(photoFile)
                     Log.d(TAG, "Photo capture succeeded: $savedUri")
 
-                    //Intent(android.hardware.Camera.ACTION_NEW_PICTURE, savedUri)
-
-                    // If the folder selected is an external media directory, this is
-                    // unnecessary but otherwise other apps will not be able to access our
-                    // images unless we scan them using [MediaScannerConnection]
-
-                    //uploadImage(savedUri)
-                    uploadImage(File(savedUri!!.path!!))
+                    uploadImage(savedUri)
                 }
             })
     }
@@ -217,52 +205,30 @@ class MainActivity : AppCompatActivity() {
         return AspectRatio.RATIO_16_9
     }
 
-    // Upload the image to the remote database
-    fun uploadImage(savedUri: Uri) {
-        val imageFile = File(savedUri.path!!) // Create a file using the absolute path of the image
-        Log.d(TAG,"Absolute Path: ${imageFile.absolutePath}")
-        val reqBody = RequestBody.create(MultipartBody.FORM, imageFile)
-        Log.d(TAG, "Request Body Length: $reqBody")
-        Log.d(TAG, "Request Body Type: ${reqBody.contentType()}")
-        Log.d(TAG, "Request Body Length: ${reqBody.contentLength()}")
-        val partImage = MultipartBody.Part.createFormData("file", imageFile.name, reqBody)
-        Log.d(TAG, "PartImage: $partImage")
-        Log.d(TAG, "PartImage Headers: ${partImage.headers()}")
-        Log.d(TAG, "PartImage Body: ${partImage.body()}")
-        val api: API = RetrofitClient().getInstance().getAPI()
-        val upload: Call<ResponseBody> = api.uploadImage(partImage)
-
-        upload.enqueue(object : Callback<ResponseBody?> {
-            override fun onResponse(call: Call<ResponseBody?>, response: Response<ResponseBody?>) {
-                if (response.isSuccessful) {
-                    Toast.makeText(this@MainActivity, "Image Uploaded", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            override fun onFailure(call: Call<ResponseBody?>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Request failed", Toast.LENGTH_SHORT).show()
-                Log.d(TAG,call.toString(),t)
-            }
-        })
-    }
-
-    fun uploadImage(file: File?): JSONObject? {
+    fun uploadImage(savedUri: Uri): JSONObject {
         try {
-            val MEDIA_TYPE_PNG = MediaType.parse("image/png")
+
+            val file = File(savedUri.path!!)
+
+            //Create the body if the request
             val req: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("userid", "8457851245")
                 .addFormDataPart(
                     "file",
                     "image.png",
-                    RequestBody.create(MEDIA_TYPE_PNG, file!!)
+                    RequestBody.create(MediaType.parse("image/png"), file)
                 )
                 .build()
+
+            //use the body to create the request itself
             val request: Request = Request.Builder()
                 .url("http://192.168.1.3:5000/fileUpload/")
                 .post(req)
                 .build()
             val client = OkHttpClient()
-            val response: okhttp3.Response = client.newCall(request).execute()
+
+            //Execute the request and return the response
+            val response: Response = client.newCall(request).execute()
             Log.d("response", "uploadImage:" + (response.body()?.string() ?: "Null response body"))
             return JSONObject(response.body()?.string() ?: "empty response")
         } catch (e: UnknownHostException) {
@@ -272,6 +238,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Other Error: " + e.localizedMessage)
         }
-        return null
+        return JSONObject()
     }
 }
