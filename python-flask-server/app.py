@@ -23,7 +23,7 @@ def allowed_file(filename):
 @app.route('/file_upload', methods=['GET', 'POST'])
 def file_upload():
     if request.method == 'POST':
-        file = request.files['image']
+        file = request.files['file']
         PATH = FOLDER+'image.jpg'
         if os.path.exists(PATH):
             os.remove(PATH)
