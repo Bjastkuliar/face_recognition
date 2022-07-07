@@ -17,13 +17,10 @@ package org.noi.androidclient
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.*
-import android.media.Image
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.view.WindowInsets
@@ -31,25 +28,25 @@ import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
-import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.net.toFile
-import com.android.volley.RequestQueue
-import com.android.volley.toolbox.Volley
 import com.robotemi.sdk.Robot
 import com.robotemi.sdk.listeners.OnRobotReadyListener
+import okhttp3.*
+import org.json.JSONObject
 import org.noi.androidclient.databinding.ActivityMainBinding
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.ByteBuffer
+import java.io.UnsupportedEncodingException
+import java.net.UnknownHostException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-
+private const val SERVER_URL = "http://10.11.145.5:5000"
+private const val CAMERA_TAG = "Camera State"
 private const val TAG = "Main"
 
 class MainActivity : AppCompatActivity(), OnRobotReadyListener {
@@ -66,7 +63,14 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
     private lateinit var imageCapture  : ImageCapture
     private lateinit var viewBinding : ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var queue:RequestQueue
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        robot = Robot.getInstance()
+        viewBinding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(viewBinding.root)
+
+    }
 
     @androidx.camera.core.ExperimentalGetImage
     override fun onStart() {
@@ -89,8 +93,6 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         }
 
         outputDirectory = applicationContext.filesDir
-
-        queue = Volley.newRequestQueue(applicationContext)
 
         viewBinding.button.setOnClickListener { takePicture() }
 
@@ -137,7 +139,7 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
                         // unnecessary but otherwise other apps will not be able to access our
                         // images unless we scan them using [MediaScannerConnection]
 
-                        send(savedUri)
+                        uploadImage(savedUri)
 
                         val mimeType = MimeTypeMap.getSingleton()
                             .getMimeTypeFromExtension(savedUri.toFile().extension)
@@ -171,14 +173,6 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         } catch (e: PackageManager.NameNotFoundException) {
             e.printStackTrace()
         }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        robot = Robot.getInstance()
-        viewBinding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(viewBinding.root)
-
     }
 
     /** Initialize CameraX, and prepare to bind the camera use cases  */
@@ -237,44 +231,33 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
             preview.setSurfaceProvider(viewBinding.previewView.surfaceProvider)
             observeCameraState(camera.cameraInfo)
         } catch (exc: Exception) {
-            Log.e(TAG, "Use case binding failed", exc)
+            Log.e(CAMERA_TAG, "Use case binding failed", exc)
         }
     }
 
     private fun observeCameraState(cameraInfo: CameraInfo) {
-        val context = baseContext
         cameraInfo.cameraState.observe(this) { cameraState ->
             run {
                 when (cameraState.type) {
                     CameraState.Type.PENDING_OPEN -> {
                         // Ask the user to close other camera apps
-                        Toast.makeText(context,
-                            "CameraState: Pending Open",
-                            Toast.LENGTH_SHORT).show()
+                        Log.d(CAMERA_TAG, "Pending Open")
                     }
                     CameraState.Type.OPENING -> {
                         // Show the Camera UI
-                        Toast.makeText(context,
-                            "CameraState: Opening",
-                            Toast.LENGTH_SHORT).show()
+                        Log.d(CAMERA_TAG, "Opening")
                     }
                     CameraState.Type.OPEN -> {
                         // Setup Camera resources and begin processing
-                        Toast.makeText(context,
-                            "CameraState: Open",
-                            Toast.LENGTH_SHORT).show()
+                        Log.d(CAMERA_TAG, "Open")
                     }
                     CameraState.Type.CLOSING -> {
                         // Close camera UI
-                        Toast.makeText(context,
-                            "CameraState: Closing",
-                            Toast.LENGTH_SHORT).show()
+                        Log.d(CAMERA_TAG, "Closing")
                     }
                     CameraState.Type.CLOSED -> {
                         // Free camera resources
-                        Toast.makeText(context,
-                            "CameraState: Closed",
-                            Toast.LENGTH_SHORT).show()
+                        Log.d(CAMERA_TAG, "Closed")
                     }
                 }
             }
@@ -284,49 +267,35 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
                     // Open errors
                     CameraState.ERROR_STREAM_CONFIG -> {
                         // Make sure to setup the use cases properly
-                        Toast.makeText(context,
-                            "Stream config error",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Use Case Misconfiguration")
                     }
                     // Opening errors
                     CameraState.ERROR_CAMERA_IN_USE -> {
                         // Close the camera or ask user to close another camera app that's using the
                         // camera
-                        Toast.makeText(context,
-                            "Camera in use",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Camera already in use")
                     }
                     CameraState.ERROR_MAX_CAMERAS_IN_USE -> {
                         // Close another open camera in the app, or ask the user to close another
                         // camera app that's using the camera
-                        Toast.makeText(context,
-                            "Max cameras in use",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Maximum cameras in use")
                     }
                     CameraState.ERROR_OTHER_RECOVERABLE_ERROR -> {
-                        Toast.makeText(context,
-                            "Other recoverable error",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Other Recoverable Error")
                     }
                     // Closing errors
                     CameraState.ERROR_CAMERA_DISABLED -> {
                         // Ask the user to enable the device's cameras
-                        Toast.makeText(context,
-                            "Camera disabled",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Camera Disabled")
                     }
                     CameraState.ERROR_CAMERA_FATAL_ERROR -> {
                         // Ask the user to reboot the device to restore camera function
-                        Toast.makeText(context,
-                            "Fatal error",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Fatal Camera Error")
                     }
                     // Closed errors
                     CameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED -> {
                         // Ask the user to disable the "Do Not Disturb" mode, then reopen the camera
-                        Toast.makeText(context,
-                            "Do not disturb mode enabled",
-                            Toast.LENGTH_SHORT).show()
+                        Log.e(CAMERA_TAG, "Do Not Disturb enabled")
                     }
                 }
             }
@@ -380,85 +349,43 @@ class MainActivity : AppCompatActivity(), OnRobotReadyListener {
         private const val RATIO_16_9_VALUE = 16.0 / 9.0
     }
 
-    private fun send(savedUri: Uri){
-        @Suppress("DEPRECATION")
-        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            ImageDecoder.decodeBitmap(
-                ImageDecoder.createSource(
-                    baseContext.contentResolver,
-                    savedUri
+    fun uploadImage(savedUri: Uri): JSONObject {
+        try {
+
+            val file = File(savedUri.path!!)
+
+            //Create the body if the request
+            val req: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "file",
+                    "image.png",
+                    RequestBody.create(MediaType.parse("image/png"), file)
                 )
-            )
-        } else {
-            MediaStore.Images.Media.getBitmap(
-                baseContext.contentResolver,
-                savedUri
-            )
+                .build()
+
+            //use the body to create the request itself
+            val request: Request = Request.Builder()
+                .url("$SERVER_URL/fileUpload/")
+                .post(req)
+                .build()
+            val client = OkHttpClient()
+
+            //Execute the request and return the response
+            val response: Response = client.newCall(request).execute()
+            Log.d("response", "uploadImage:" + (response.body()?.string() ?: "Null response body"))
+            return JSONObject(response.body()?.string() ?: "empty response")
+        } catch (e: UnknownHostException) {
+            Log.e(TAG, "Error: " + e.localizedMessage)
+        } catch (e: UnsupportedEncodingException) {
+            Log.e(TAG, "Error: " + e.localizedMessage)
+        } catch (e: Exception) {
+            Log.e(TAG, "Other Error: " + e.localizedMessage)
         }
-
-        var imageName = "picture"
-
-        val url = "http://10.11.145.3:5000/recognition/$imageName.jpg"
-
-        Log.d("Volley", "Sending $imageName to $url")
-
-        val multipartRequest : CustomVolleyMultipartRequest = object : CustomVolleyMultipartRequest(
-            Method.POST, url,
-            {
-                Log.d("Volley", "Success! "+responseToString(it.data))
-            },{
-                Log.e("Volley", "" + it.message)
-            }
-        ) {
-            override fun getByteData(): MutableMap<String, DataPart> {
-                val params: MutableMap<String, DataPart> = HashMap()
-                imageName = System.currentTimeMillis().toString()
-                params["image"] = DataPart("$imageName.png", getFileDataFromDrawable(bitmap))
-                return params
-            }
-        }
-
-        queue.add(multipartRequest)
-
-    }
-
-    fun getFileDataFromDrawable(bitmap: Bitmap): ByteArray {
-        val byteArrayOutputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 80, byteArrayOutputStream)
-        return byteArrayOutputStream.toByteArray()
-    }
-
-    private fun responseToString(array: ByteArray): String {
-        val builder = StringBuilder()
-        for (aByte in array) {
-            builder.append(aByte.toInt().toChar())
-        }
-        return builder.toString()
+        return JSONObject()
     }
 
     override fun onStop() {
         super.onStop()
         cameraExecutor.shutdown()
-        queue.cancelAll(TAG)
-    }
-
-    private fun toBitmap(image: Image): Bitmap {
-        val planes: Array<Image.Plane> = image.planes
-        val yBuffer: ByteBuffer = planes[0].buffer
-        val uBuffer: ByteBuffer = planes[1].buffer
-        val vBuffer: ByteBuffer = planes[2].buffer
-        val ySize: Int = yBuffer.remaining()
-        val uSize: Int = uBuffer.remaining()
-        val vSize: Int = vBuffer.remaining()
-        val nv21 = ByteArray(ySize + uSize + vSize)
-        //U and V are swapped
-        yBuffer.get(nv21, 0, ySize)
-        vBuffer.get(nv21, ySize, vSize)
-        uBuffer.get(nv21, ySize + vSize, uSize)
-        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, yuvImage.width, yuvImage.height), 75, out)
-        val imageBytes = out.toByteArray()
-        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
     }
 }
